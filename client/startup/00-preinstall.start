@@ -1,0 +1,30 @@
+#!/bin/sh
+# /etc/local.d/00-preinstall.start
+# Minimal offline installer from custom cache with boot-time messages + logging
+
+set -eu
+
+# Redirect stdout and stderr to /dev/tty1 for visibility
+# This is necessary because the script runs in a non-interactive environment.
+exec > /dev/tty1 2>&1
+
+CACHE="/etc/apk/custom-repo"
+
+echo "[preinstall] Starting offline install from $CACHE"
+
+if ls "$CACHE"/*.apk >/dev/null 2>&1; then
+    echo "[preinstall] Found APK files:"
+    ls -1 "$CACHE"/*.apk
+
+    echo "[preinstall] Installing packages..."
+    if apk add --no-network --cache-dir "$CACHE" "$CACHE"/*.apk; then
+        echo "[preinstall] Install completed successfully"
+    else
+        echo "[preinstall] ERROR: Install failed"
+    fi
+else
+    echo "[preinstall] No APK files found in $CACHE, skipping"
+fi
+
+echo "[preinstall] Done."
+exit 0

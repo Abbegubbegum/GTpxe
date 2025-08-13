@@ -1,0 +1,62 @@
+#!/bin/sh
+# /etc/local.d/run_diagnostic.start
+
+set -eu
+
+# Redirect stdout and stderr to /dev/tty1 for visibility
+# Its needed because the script is run in a non-interactive environment so stdout is not set yet.
+exec > /dev/tty1 2>&1
+
+print_green() {
+  echo -e "\033[0;32m$1\033[0m"
+}
+
+# same for red
+print_red() {
+  echo -e "\033[0;31m$1\033[0m"
+}
+
+# This script runs the diagnostic tests for the client application.
+print_green "Running diagnostic tests for the client application..."
+
+# Get core count
+CORE_COUNT=$(nproc)
+print_green "Detected $CORE_COUNT CPU cores."
+
+print_green "Starting Memory/CPU Test with stress-ng"
+
+stress-ng --cpu $CORE_COUNT --vm $CORE_COUNT --vm-bytes 75% --timeout 30s --metrics-brief
+
+if [ $? -ne 0 ]; then
+    print_red "Memory/CPU Test failed."
+    exit 1
+else
+    print_green "Memory/CPU Test completed successfully."
+fi
+
+print_green "Running Memtest for memory testing..."
+
+memtester 100M 1
+
+if [ $? -ne 0 ]; then
+    print_red "Memtest failed."
+    exit 1
+else
+    print_green "Memtest completed successfully."
+fi
+
+print_green "Running Keyboard Test..."
+
+/home/ssh/keyboard_test
+
+# Note: This is a placeholder for the keyboard test.
+read -p "Press any key to continue..." -n1 -s
+
+if [ $? -ne 0 ]; then
+    print_red "Keyboard Test failed."
+    exit 1
+else
+    print_green "Keyboard Test completed successfully."
+fi
+
+exit 0
