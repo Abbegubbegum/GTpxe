@@ -3,12 +3,18 @@
 # Init networking
 dhcp
 
+# Check the firmware and architecture
+cpuid --ext 29 && set arch x86_64 || set arch x86
+
+iseq ${platform} efi && set fw uefi || set fw bios
+
+echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}
 
 # Location for the boot files
-set server http://192.168.150.62/alpine/boot
+set server http://192.168.150.62/alpine/boot/${arch}
 
 # Location for the local package repo
-set alpine_repo http://192.168.150.62/alpine/apks
+set alpine_repo http://192.168.150.62/alpine/apks/${arch}
 
 # Kernel file
 set vmlinuz ${server}/vmlinuz-lts
@@ -25,7 +31,7 @@ set apkovl ${server}/localhost.apkovl.tar.gz
 set ipconfig ip=192.168.150.105:::255.255.255.0:
 
 # If you want DHCP instead
-set ipconfig ip=dhcp
+#set ipconfig ip=dhcp
 
 :menu
 menu Boot Menu
