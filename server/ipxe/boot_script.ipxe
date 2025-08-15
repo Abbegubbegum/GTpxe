@@ -10,11 +10,18 @@ iseq ${platform} efi && set fw uefi || set fw bios
 
 echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}
 
+:menu
+menu Choose Architecture
+item x86_64 Boot x86_64
+item x86 Boot x86
+choose --default ${arch} --timeout 5000 arch
+
+
 # Location for the boot files
 set server http://192.168.150.62/alpine/boot/${arch}
 
 # Location for the local package repo
-set alpine_repo http://192.168.150.62/alpine/apks/${arch}
+set alpine_repo http://192.168.150.62/alpine/apks
 
 # Kernel file
 set vmlinuz ${server}/vmlinuz-lts

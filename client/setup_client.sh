@@ -9,7 +9,7 @@ sed -i 's/^\s*#//' /etc/apk/repositories
 # Create the local repository
 mkdir -p /etc/apk/custom-repo
 apk update
-apk fetch --arch x86_64 --recursive --output /etc/apk/custom-repo memtester stress-ng
+apk fetch --recursive --output /etc/apk/custom-repo memtester stress-ng
 lbu add /etc/apk/custom-repo/
 
 # Add the diagnostic scripts

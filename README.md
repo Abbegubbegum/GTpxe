@@ -83,6 +83,7 @@ This will contain all of our scripts, diagnostic packages and system settings.
 -   A network connection is required for the setup to download the packages
 -   empty password on the root user
 -   add an ssh user to copy the .apkovl file over scp
+-   The rest of the options, leave as default
 
 3. Create and send the correct client package
 
