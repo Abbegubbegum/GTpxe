@@ -6,6 +6,9 @@ set -eu
 
 cd client
 
+rm -rf packages/x86_64
+rm -rf packages/x86
+
 mkdir -p packages/x86_64
 mkdir -p packages/x86
 
