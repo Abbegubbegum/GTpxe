@@ -19,6 +19,6 @@ chmod +x /etc/local.d/*.start
 #rc-update add local default
 lbu add /etc/local.d/
 
-# Add the keyboard test binary
+# Make the scripts executable
 chmod +x /home/ssh/keyboard_test
-lbu add /home/ssh/keyboard_test
+chmod +x /home/ssh/scripts/*

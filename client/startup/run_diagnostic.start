@@ -3,10 +3,6 @@
 
 set -eu
 
-# Redirect stdout and stderr to /dev/tty1 for visibility
-# Its needed because the script is run in a non-interactive environment so stdout is not set yet.
-exec > /dev/tty1 2>&1
-
 print_green() {
   echo -e "\033[0;32m$1\033[0m"
 }
@@ -16,8 +12,47 @@ print_red() {
   echo -e "\033[0;31m$1\033[0m"
 }
 
+# This block is for creating a watcher that reads if "q" is pressed to quit the tests early without waiting for input.
+
+start_abort_watcher() {
+    (
+        exec < "/dev/tty1" > /dev/null 2>&1
+
+        OLDSTTY=$(stty -g)
+        stty -echo -icanon min 0 time 0
+
+        while :; do
+            char=$(dd bs=1 count=1 2>/dev/null)
+            if [ "$char" = "q" ]; then
+                print_red "[ABORT] Key press received. Exiting tests." > /dev/tty1
+                kill -KILL "$$"
+                break
+            fi
+            sleep 0.1
+        done
+
+        stty "$OLDSTTY"
+    ) & ABORT_WATCHER_PID=$!
+}
+
+cleanup_abort_watcher() {
+    [ -n "$ABORT_WATCHER_PID" ] && kill "$ABORT_WATCHER_PID" 2>/dev/null || true
+}
+
+trap cleanup_abort_watcher EXIT INT TERM
+
+start_abort_watcher
+
+# Redirect stdout and stderr to /dev/tty1 for visibility
+# Its needed because the script is run in a non-interactive environment so stdout is not set yet.
+exec > /dev/tty1 2>&1
+
 # This script runs the diagnostic tests for the client application.
 print_green "Running diagnostic tests for the client application..."
+print_green "Press 'q' to abort the tests early."
+
+# Wait for early exit
+sleep 2
 
 # Get core count
 CORE_COUNT=$(nproc)
@@ -45,12 +80,20 @@ else
     print_green "Memtest completed successfully."
 fi
 
+print_green "Test Serial Ports..."
+
+/home/ssh/scripts/serial_test.sh
+
+if [ $? -ne 0 ]; then
+    print_red "Serial test failed."
+    exit 1
+else
+    print_green "Serial test completed successfully."
+fi
+
 print_green "Running Keyboard Test..."
 
 /home/ssh/keyboard_test
-
-# Note: This is a placeholder for the keyboard test.
-read -p "Press any key to continue..." -n1 -s
 
 if [ $? -ne 0 ]; then
     print_red "Keyboard Test failed."

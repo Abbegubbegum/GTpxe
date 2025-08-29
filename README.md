@@ -95,7 +95,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r client/packag
 ```
 
 -   Then run the setup_client script on the alpine machine
-it will be located in /home/ssh
+    it will be located in /home/ssh
 
 4. Revert some settings in setup-alpine
 
@@ -157,6 +157,48 @@ I used this as a guide: https://www.apalrd.net/posts/2022/alpine_pxe/
 -   Alpine Linux kernel (`vmlinuz-lts`) and initramfs (`initramfs-lts`) placed in the TFTP root.
 -   Network connectivity for initial Alpine package downloads or prebuilt custom initramfs including required packages.
 -   Target hardware supporting PXE boot.
+
+---
+
+## Explanation of ssty flags (by chatgpt)
+
+You bet—here’s what each stty bit in the line does (this is POSIX/BusyBox-compatible):
+
+-   -F "$p" → operate on the device file $p (not on your stdin TTY).
+
+-   115200 → set both input & output speed to 115200 baud.
+
+-   cs8 → 8 data bits per character.
+
+-   -cstopb → one stop bit (clears cstopb, which would mean 2 stop bits).
+
+-   -parenb → disable parity (no even/odd parity bit).
+
+-   -ixon → disable software flow control on input (ignore XON/XOFF characters like Ctrl-S/Ctrl-Q).
+
+-   -ixoff → disable software flow control on output (don’t transmit XON/XOFF).
+
+-   -crtscts → disable hardware RTS/CTS flow control. (Use crtscts if you want hardware flow control.)
+
+-   -echo → don’t echo back typed/received characters locally.
+
+-   -icanon → non-canonical (“raw-ish”) mode: input isn’t line-buffered and special edit keys aren’t interpreted.
+
+-   -opost → disable output post-processing (e.g., no automatic \n → \r\n translation).
+
+-   clocal → ignore modem control lines (DCD/CTS/DSR); treat the line as “local” so opens/IO don’t depend on carrier.
+
+-   min 0 / time 10 → read timeout settings that only apply in non-canonical mode:
+
+-   VMIN=0, VTIME=10 (tenths of a second) ⇒ a read() returns immediately with whatever is available, or waits up to ~1.0 s if nothing is available, then returns (possibly with 0 bytes).
+
+Why these matter for your loopback test:
+
+-   Ensures a known 8N1, no-flow-control, raw path so your bytes go out exactly as sent.
+
+-   Prevents \n from turning into \r\n (-opost), which would break exact string compares.
+
+-   The min/time combo gives you a clean per-read timeout without needing external timeout.
 
 ---
 
