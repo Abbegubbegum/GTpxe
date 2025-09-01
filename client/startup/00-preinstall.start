@@ -15,7 +15,7 @@ echo "[preinstall] Starting offline install from $CACHE"
 if ls "$CACHE"/*.apk >/dev/null 2>&1; then
     echo "[preinstall] Found APK files:"
     ls -1 "$CACHE"/*.apk
-
+    
     echo "[preinstall] Installing packages..."
     if apk add --no-network --cache-dir "$CACHE" "$CACHE"/*.apk; then
         echo "[preinstall] Install completed successfully"

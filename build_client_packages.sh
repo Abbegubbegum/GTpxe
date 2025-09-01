@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 # This script creates a "client" package that can then be sent to a client to setup the apkovl.
 # This will contatin the diagnostic scripts and a script to setup everything for the overlay.
 

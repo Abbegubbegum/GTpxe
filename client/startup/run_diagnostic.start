@@ -4,12 +4,12 @@
 set -eu
 
 print_green() {
-  echo -e "\033[0;32m$1\033[0m"
+    printf "\033[0;32m%s\033[0m" "$1"
 }
 
 # same for red
 print_red() {
-  echo -e "\033[0;31m$1\033[0m"
+    printf "\033[0;31m%s\033[0m" "$1"
 }
 
 # This block is for creating a watcher that reads if "q" is pressed to quit the tests early without waiting for input.
@@ -17,10 +17,10 @@ print_red() {
 start_abort_watcher() {
     (
         exec < "/dev/tty1" > /dev/null 2>&1
-
+        
         OLDSTTY=$(stty -g)
         stty -echo -icanon min 0 time 0
-
+        
         while :; do
             char=$(dd bs=1 count=1 2>/dev/null)
             if [ "$char" = "q" ]; then
@@ -30,7 +30,7 @@ start_abort_watcher() {
             fi
             sleep 0.1
         done
-
+        
         stty "$OLDSTTY"
     ) & ABORT_WATCHER_PID=$!
 }
@@ -60,9 +60,8 @@ print_green "Detected $CORE_COUNT CPU cores."
 
 print_green "Starting Memory/CPU Test with stress-ng"
 
-stress-ng --cpu $CORE_COUNT --vm $CORE_COUNT --vm-bytes 75% --timeout 30s --metrics-brief
-
-if [ $? -ne 0 ]; then
+if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
+then
     print_red "Memory/CPU Test failed."
     exit 1
 else
@@ -71,9 +70,8 @@ fi
 
 print_green "Running Memtest for memory testing..."
 
-memtester 100M 1
-
-if [ $? -ne 0 ]; then
+if ! memtester 100M 1
+then
     print_red "Memtest failed."
     exit 1
 else
@@ -82,20 +80,20 @@ fi
 
 print_green "Test Serial Ports..."
 
-/home/ssh/scripts/serial_test.sh
-
-if [ $? -ne 0 ]; then
-    print_red "Serial test failed."
-    exit 1
+if ! /home/ssh/scripts/serial_test.sh
+then
+    print_red "Serial test possible failure."
+    # Don't exit here because for the DBF, there are serial port chips that are not connected to anything.
+    # It fails but its expected.
+    #exit 1
 else
     print_green "Serial test completed successfully."
 fi
 
 print_green "Running Keyboard Test..."
 
-/home/ssh/keyboard_test
-
-if [ $? -ne 0 ]; then
+if ! /home/ssh/keyboard_test
+then
     print_red "Keyboard Test failed."
     exit 1
 else

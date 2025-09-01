@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 
 # Run this script to set up the client environment ready for the overlay.
 # Run this after running setup-alpine and following the instructions in README.md
