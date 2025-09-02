@@ -4,12 +4,12 @@
 set -eu
 
 print_green() {
-    printf "\033[0;32m%s\033[0m" "$1"
+    printf "\033[0;32m%s\033[0m" "$1" "\n"
 }
 
 # same for red
 print_red() {
-    printf "\033[0;31m%s\033[0m" "$1"
+    printf "\033[0;31m%s\033[0m" "$1" "\n"
 }
 
 # This block is for creating a watcher that reads if "q" is pressed to quit the tests early without waiting for input.
@@ -89,6 +89,9 @@ then
 else
     print_green "Serial test completed successfully."
 fi
+
+#Kill the watcher before starting the keyboard test
+cleanup_abort_watcher
 
 print_green "Running Keyboard Test..."
 

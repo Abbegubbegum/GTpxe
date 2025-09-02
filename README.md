@@ -108,13 +108,19 @@ Do this by when the APK mirror option comes up, choose edit in text editor and p
    We do this now because if we do it before, when we run setup-alpine, diagnostics start because it restarts
 
 6. Create the backup using 'lbu pkg /home/ssh'
-7. Copy over the .apkovl file to the pxe server
+7. Copy over the .apkovl file to the pxe server or your host pc
 
 MAKE SURE TO COPY IT TO THE CORRECT ARCHITECTURE FOLDER, x86 or x86_64
 
 ```sh
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz /srv/www/alpine-new/boot/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz /srv/www/alpine/boot/x86_64/
 ```
+
+or
+```sh
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz server/boot/x86_64/
+```
+
 
 ---
 
