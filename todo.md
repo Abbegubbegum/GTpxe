@@ -8,3 +8,4 @@ TODO LIST:
 - Mousepad test ?
 - Fiber?
 - Device identification, for unique hardware keyboards
+- Speaker Test

@@ -9,7 +9,11 @@ TIMEOUT_SECONDS=1
 ports() {
     for port in /dev/ttyS*; do
         # If the port exists, print it (return value basically)
-        [ -e "$port" ] && printf '%s\n' "$port"
+        if ! stty -F "$port" -a 2>/dev/null; then
+            continue
+        fi
+        
+        printf '%s\n' "$port"
     done
 }
 
@@ -19,7 +23,12 @@ drain_port() {
 }
 
 rc=0
-for port in $(ports); do
+
+found_ports=$(ports)
+
+[ -n "$found_ports" ] || { echo "No serial ports found." >&2; exit 0; }
+
+for port in $found_ports; do
     echo "Testing $port ..."
     success=0
     
