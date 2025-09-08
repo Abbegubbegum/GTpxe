@@ -9,14 +9,17 @@ cd client
 rm -rf packages/x86_64
 rm -rf packages/x86
 
-mkdir -p packages/x86_64
-mkdir -p packages/x86
+mkdir -p packages/x86_64/binaries
+mkdir -p packages/x86/binaries
 
 cp -r startup packages/x86_64/
 cp -r startup packages/x86/
 
-cp keyboard_test/build/keyboard_test_x86_64 packages/x86_64/keyboard_test
-cp keyboard_test/build/keyboard_test_i686 packages/x86/keyboard_test
+cp keyboard_test/build/keyboard_test_x86_64 packages/x86_64/binaries/keyboard_test
+cp keyboard_test/build/keyboard_test_i686 packages/x86/binaries/keyboard_test
+
+cp screen_test/build/screen_test_x86_64 packages/x86_64/binaries/screen_test
+cp screen_test/build/screen_test_i686 packages/x86/binaries/screen_test
 
 cp setup_client.sh packages/x86_64/
 cp setup_client.sh packages/x86/

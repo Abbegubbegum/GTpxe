@@ -20,5 +20,5 @@ chmod +x /etc/local.d/*.start
 lbu add /etc/local.d/
 
 # Make the scripts executable
-chmod +x /home/ssh/keyboard_test
+chmod +x /home/ssh/binaries/*
 chmod +x /home/ssh/scripts/*

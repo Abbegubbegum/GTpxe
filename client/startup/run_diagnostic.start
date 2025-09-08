@@ -49,7 +49,7 @@ run_keyboard_test() {
     
     # run TUI on a different VT (let openvt pick a free one)
     # -s: switch to it, -w: wait for it to exit, -f: force if busy
-    openvt -swf -- /home/ssh/keyboard_test
+    openvt -swf -- /home/ssh/binaries/keyboard_test
     
     # return to where we started
     chvt "$orig"
