@@ -41,21 +41,30 @@ cleanup_abort_watcher() {
 
 start_abort_watcher
 
-# This function is used to run the keyboard test in a separate VT.
-run_keyboard_test() {
+run_in_vt() {
     # which VT are we currently on? (e.g. "tty1")
     orig=$(cat /sys/class/tty/tty0/active)   # outputs "ttyN"
     orig=${orig#tty}
     
     # run TUI on a different VT (let openvt pick a free one)
     # -s: switch to it, -w: wait for it to exit, -f: force if busy
-    openvt -swf -- /home/ssh/binaries/keyboard_test
+    openvt -swf -- "$1"
     
     # return to where we started
     chvt "$orig"
     
     # (optional) if the keyboard feels weird back on tty$orig:
     stty sane </dev/tty"$orig" || true
+    
+}
+
+# This function is used to run the keyboard test in a separate VT.
+run_keyboard_test() {
+    run_in_vt /home/ssh/binaries/keyboard_test
+}
+
+run_screen_test() {
+    run_in_vt /home/ssh/binaries/screen_test
 }
 
 # Redirect stdout and stderr to /dev/tty1 for visibility
@@ -112,6 +121,10 @@ cleanup_abort_watcher
 print_green "Running Keyboard Test..."
 
 run_keyboard_test
+
+print_green "Running screen test..."
+
+run_screen_test
 
 print_green "All tests completed. GTUA"
 
