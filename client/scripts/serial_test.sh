@@ -9,7 +9,7 @@ TIMEOUT_SECONDS=1
 ports() {
     for port in /dev/ttyS*; do
         # If the port exists, print it (return value basically)
-        if ! stty -F "$port" -a 2>/dev/null; then
+        if ! stty -F "$port" -a >/dev/null 2>&1; then
             continue
         fi
         

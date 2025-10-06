@@ -5,3 +5,5 @@ client/overlays/x86_64
 client/overlays/x86
 
 server/ipxe
+server/package/boot/x86/localhost.apkovl.tar.gz
+server/package/boot/x86_64/localhost.apkovl.tar.gz
