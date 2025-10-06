@@ -1,4 +1,7 @@
 client/keyboard_test
 client/screen_test
 client/packages
-./ipxe
+client/overlays/x86_64
+client/overlays/x86
+
+server/ipxe

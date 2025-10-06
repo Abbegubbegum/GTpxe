@@ -1,0 +1,58 @@
+#!ipxe
+
+# Init networking
+dhcp
+
+# Check the firmware and architecture
+cpuid --ext 29 && set arch x86_64 || set arch x86
+
+iseq ${platform} efi && set fw uefi || set fw bios
+
+echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}
+
+:menu
+menu Choose Architecture
+item x86_64 Boot x86_64
+item x86 Boot x86
+choose --default ${arch} --timeout 5000 arch
+
+
+# Location for the boot files
+set server http://pxe-server/alpine/boot/${arch}
+
+# Location for the local package repo
+set alpine_repo http://pxe-server/alpine/apks
+
+# Kernel file
+set vmlinuz ${server}/vmlinuz-lts
+
+set initramfsfilename initramfs-lts
+set initramfs ${server}/${initramfsfilename}
+
+set modloop ${server}/modloop-lts
+
+set apkovl ${server}/localhost.apkovl.tar.gz
+
+
+# IP config if you want a static ip
+#set ipconfig ip=192.168.150.105:::255.255.255.0:
+
+# If you want DHCP instead
+set ipconfig ip=dhcp
+
+:menu
+menu Boot Menu
+item alpine-ovl   Boot with Overlay 
+item alpine-def   Boot without Overlay
+choose --default alpine-ovl --timeout 5000 target && goto ${target}
+
+# Boot with the apkovl
+:alpine-ovl
+kernel ${vmlinuz} ${ipconfig} initrd=${initramfsfilename} alpine_repo=${alpine_repo} modloop=${modloop} apkovl=${apkovl}
+initrd ${initramfs}
+boot
+
+:alpine-def
+kernel ${vmlinuz} ${ipconfig} initrd=${initramfsfilename} alpine_repo=${alpine_repo} modloop=${modloop}
+initrd ${initramfs}
+boot

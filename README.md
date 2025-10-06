@@ -167,12 +167,12 @@ sudo systemctl start ssh
 Now you can connect to the Rock with SSH with the user Rock@192.168.150.30
 
 3. Setup the DHCP, tftp and http servers
-   First copy over the server folder
+   Copy over the server/package folder and run the script
 
 ```sh
-scp -r ./server rock@192.168.150.30:~/
+scp -r ./server/package rock@192.168.150.30:~/
 ssh rock@192.168.150.30
-cd server
+cd package
 sudo chmod +x ./setup_server.sh
 sudo ./setup_server.sh
 ```
