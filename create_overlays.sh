@@ -15,6 +15,9 @@ rm -rf overlays/x86
 mkdir -p overlays/x86_64/home/ssh
 mkdir -p overlays/x86/home/ssh
 
+mkdir -p ../server/package/boot/x86_64
+mkdir -p ../server/package/boot/x86
+
 tar -xzf overlays/x86_64.apkovl.tar.gz -C overlays/x86_64
 tar -xzf overlays/x86.apkovl.tar.gz -C overlays/x86
 
