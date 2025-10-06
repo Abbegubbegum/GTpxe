@@ -124,6 +124,15 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.
 
 ---
 
+## Update overlays on PXE server
+To update the overlay files on the pxe server that is persistant on the internal network
+
+1. Run ./create_overlay.sh
+
+
+
+---
+
 ## Setup PXE Server on Rock 4
 
 1. Download the official debian cli os and flash it to the simcard

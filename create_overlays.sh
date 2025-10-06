@@ -9,6 +9,9 @@ set -eu
 
 cd client
 
+rm -rf overlays/x86_64
+rm -rf overlays/x86
+
 mkdir -p overlays/x86_64
 mkdir -p overlays/x86
 
