@@ -117,10 +117,65 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.
 ```
 
 or
+
 ```sh
 scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz server/boot/x86_64/
 ```
 
+---
+
+## Setup PXE Server on Rock 4
+
+1. Download the official debian cli os and flash it to the simcard
+   https://github.com/radxa-build/rock-4se/releases
+
+On Linux:
+
+```sh
+xzcat rock-4se_debian_bullseye_cli_b38.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+sync
+```
+
+(Replace /dev/sdX with what your sd card device is)
+
+2. Startup the Rock 4 and enable ssh
+   Connect the sim-card, an ethernet cable and mouse & keyboard and then connect power to start it up.
+
+Login with user/pwd: Rock/Rock
+
+setup the networking
+
+```sh
+sudo nano /etc/network/interfaces.d/eth0
+```
+
+```ini
+auto eth0
+iface eth0 inet static
+    address 192.168.150.30
+    netmask 255.255.255.0
+    gateway 192.168.150.254
+    dns-nameservers 1.1.1.1
+```
+
+```sh
+sudo systemctl restart networking
+sudo systemctl enable ssh
+sudo systemctl start ssh
+```
+
+Now you can connect to the Rock with SSH with the user Rock@192.168.150.30
+
+3. Setup the DHCP, tftp and http servers
+   First copy over the server folder
+
+```sh
+scp -r ./server rock@192.168.150.30:~/
+ssh rock@192.168.150.30
+cd server
+sudo chmod +x ./setup_server.sh
+sudo ./setup_server.sh
+```
 
 ---
 

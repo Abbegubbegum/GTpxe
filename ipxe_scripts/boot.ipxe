@@ -18,10 +18,10 @@ choose --default ${arch} --timeout 5000 arch
 
 
 # Location for the boot files
-set server http://192.168.150.62/alpine/boot/${arch}
+set server http://pxe-server/alpine/boot/${arch}
 
 # Location for the local package repo
-set alpine_repo http://192.168.150.62/alpine/apks
+set alpine_repo http://pxe-server/alpine/apks
 
 # Kernel file
 set vmlinuz ${server}/vmlinuz-lts
@@ -35,10 +35,10 @@ set apkovl ${server}/localhost.apkovl.tar.gz
 
 
 # IP config if you want a static ip
-set ipconfig ip=192.168.150.105:::255.255.255.0:
+#set ipconfig ip=192.168.150.105:::255.255.255.0:
 
 # If you want DHCP instead
-#set ipconfig ip=dhcp
+set ipconfig ip=dhcp
 
 :menu
 menu Boot Menu
