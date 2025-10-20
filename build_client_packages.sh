@@ -6,6 +6,14 @@ set -eu
 
 cd client
 
+cd keyboard_test
+./build.sh
+
+cd ../screen_test
+./build.sh
+
+cd ..
+
 rm -rf packages/x86_64
 rm -rf packages/x86
 
