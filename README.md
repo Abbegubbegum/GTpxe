@@ -133,10 +133,8 @@ To update the overlay files on the pxe server that is persistant on the internal
 2. Copy over the files
 
 ```sh
-cd server/package
-
-scp boot/x86_64/* tele@192.168.150.62:/srv/www/alpine/boot/x86_64/
-scp boot/x86/* tele@192.168.150.62:/srv/www/alpine/boot/x86/
+scp server/package/boot/x86_64/* tele@192.168.150.62:/srv/www/alpine/boot/x86_64/
+scp server/package/boot/x86/* tele@192.168.150.62:/srv/www/alpine/boot/x86/
 ```
 
 ---

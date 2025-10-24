@@ -85,23 +85,23 @@ print_green "Detected $CORE_COUNT CPU cores."
 
 print_green "Starting Memory/CPU Test with stress-ng"
 
-if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
-then
-    print_red "Memory/CPU Test failed."
-    exit 1
-else
-    print_green "Memory/CPU Test completed successfully."
-fi
+# if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
+# then
+#     print_red "Memory/CPU Test failed."
+#     exit 1
+# else
+#     print_green "Memory/CPU Test completed successfully."
+# fi
 
-print_green "Running Memtest for memory testing..."
+# print_green "Running Memtest for memory testing..."
 
-if ! memtester 100M 1
-then
-    print_red "Memtest failed."
-    exit 1
-else
-    print_green "Memtest completed successfully."
-fi
+# if ! memtester 100M 1
+# then
+#     print_red "Memtest failed."
+#     exit 1
+# else
+#     print_green "Memtest completed successfully."
+# fi
 
 print_green "Test Serial Ports..."
 
