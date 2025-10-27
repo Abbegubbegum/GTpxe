@@ -113,13 +113,13 @@ Do this by when the APK mirror option comes up, choose edit in text editor and p
 MAKE SURE TO COPY IT TO THE CORRECT ARCHITECTURE FOLDER, x86 or x86_64
 
 ```sh
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz /srv/www/alpine/boot/x86_64/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz ./client/overlays/x86_64.apkovl.tar.gz
 ```
 
 or
 
 ```sh
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz server/boot/x86_64/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ssh@192.168.150.105:~/localhost.apkovl.tar.gz ./client/overlays/x86.apkovl.tar.gz
 ```
 
 ---

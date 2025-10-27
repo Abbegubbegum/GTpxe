@@ -8,7 +8,7 @@ set -eu
 # This is necessary because the script runs in a non-interactive environment.
 exec > /dev/tty1 2>&1
 
-CACHE="/etc/apk/custom-repo"
+CACHE="/var/cache/apk"
 
 echo "[preinstall] Starting offline install from $CACHE"
 
@@ -17,7 +17,7 @@ if ls "$CACHE"/*.apk >/dev/null 2>&1; then
     ls -1 "$CACHE"/*.apk
     
     echo "[preinstall] Installing packages..."
-    if apk add --no-network --cache-dir "$CACHE" "$CACHE"/*.apk; then
+    if apk add --no-network --cache-dir "$CACHE" memtester stress-ng smartmontools nvme-cli util-linux; then
         echo "[preinstall] Install completed successfully"
     else
         echo "[preinstall] ERROR: Install failed"

@@ -6,11 +6,11 @@
 # This will remove the comment on the apk community repository, so that we can fetch community packages.
 sed -i 's/^\s*#//' /etc/apk/repositories
 
-# Create the local repository
-mkdir -p /etc/apk/custom-repo
+#Install necessary packages
 apk update
-apk fetch --recursive --output /etc/apk/custom-repo memtester stress-ng
-lbu add /etc/apk/custom-repo/
+apk add memtester stress-ng smartmontools nvme-cli util-linux
+# Add the cache to the overlay to reinstall offline when offline
+lbu add /var/cache/apk
 
 # Add the diagnostic scripts
 mv /home/ssh/startup/* /etc/local.d/

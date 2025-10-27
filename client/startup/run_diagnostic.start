@@ -88,6 +88,7 @@ print_green "Starting Memory/CPU Test with stress-ng"
 # if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
 # then
 #     print_red "Memory/CPU Test failed."
+# cleanup_abort_watcher
 #     exit 1
 # else
 #     print_green "Memory/CPU Test completed successfully."
@@ -98,10 +99,21 @@ print_green "Starting Memory/CPU Test with stress-ng"
 # if ! memtester 100M 1
 # then
 #     print_red "Memtest failed."
+# cleanup_abort_watcher
 #     exit 1
 # else
 #     print_green "Memtest completed successfully."
 # fi
+
+print_green "Running Disk Selftest..."
+if ! /home/ssh/scripts/disk_health.sh
+then
+    print_red "Disk check failed."
+    cleanup_abort_watcher
+    exit 1
+else
+    print_green "Disk selftest completed successfully"
+fi
 
 print_green "Test Serial Ports..."
 
