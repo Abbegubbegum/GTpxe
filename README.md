@@ -96,18 +96,7 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r client/packag
 
 -   Then run the setup_client script on the alpine machine
     it will be located in /home/ssh
-
-4. Revert some settings in setup-alpine
-
--   Mainly remove the networking if necessary
--   Also remove the apk repos so it doesn't try to fetch during boot, slowing down the boot
-
-Do this by when the APK mirror option comes up, choose edit in text editor and put # infront of the 2 online repos
-
-5. Enable the local service with 'rc-update add local default'
-   We do this now because if we do it before, when we run setup-alpine, diagnostics start because it restarts
-
-6. Create the backup using 'lbu pkg /home/ssh'
+    
 7. Copy over the .apkovl file to the pxe server or your host pc
 
 MAKE SURE TO COPY IT TO THE CORRECT ARCHITECTURE FOLDER, x86 or x86_64

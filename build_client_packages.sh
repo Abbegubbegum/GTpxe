@@ -34,3 +34,6 @@ cp setup_client.sh packages/x86/
 
 cp -r scripts packages/x86_64/
 cp -r scripts packages/x86/
+
+cp -r python packages/x86_64/
+cp -r python packages/x86/

@@ -106,7 +106,7 @@ print_green "Starting Memory/CPU Test with stress-ng"
 # fi
 
 print_green "Running Disk Selftest..."
-if ! /home/ssh/scripts/disk_health.sh
+if ! python3 /home/ssh/python/disk_health.py
 then
     print_red "Disk check failed."
     cleanup_abort_watcher
