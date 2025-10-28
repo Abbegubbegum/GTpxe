@@ -9,7 +9,7 @@ set -eu
 exec > /dev/tty1 2>&1
 
 echo "[preinstall] Installing packages..."
-if apk add --allow-untrusted memtester stress-ng smartmontools nvme-cli util-linux python3; then
+if apk add --allow-untrusted memtester stress-ng smartmontools nvme-cli util-linux python3 acpi; then
     echo "[preinstall] Install completed successfully"
 else
     echo "[preinstall] ERROR: Install failed"

@@ -20,7 +20,7 @@ mkdir -p "$REPO_PATH"
 cd "$REPO_PATH" || exit
 
 apk update
-apk fetch --recursive memtester stress-ng smartmontools nvme-cli util-linux python3
+apk fetch --recursive memtester stress-ng smartmontools nvme-cli util-linux python3 acpi
 apk index -o APKINDEX.tar.gz -- *.apk
 
 lbu add /var/custom-repo/

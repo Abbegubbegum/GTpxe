@@ -115,6 +115,9 @@ else
     print_green "Disk selftest completed successfully"
 fi
 
+print_green "Battery Status:"
+acpi -V
+
 print_green "Test Serial Ports..."
 
 if ! /home/ssh/scripts/serial_test.sh
