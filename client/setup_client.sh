@@ -48,6 +48,9 @@ echo "Making binaries and script files executable..."
 chmod +x /home/ssh/binaries/*
 chmod +x /home/ssh/scripts/*
 
+mv /home/ssh/scripts/restart_test.sh /root
+lbu add /root
+
 echo "Disabling online APK repositories..."
 sed -i '/^http:\/\/dl-cdn/s|^|#|' /etc/apk/repositories
 

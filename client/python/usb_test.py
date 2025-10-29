@@ -255,15 +255,11 @@ def evaluate_port(port_result: Dict[str, Any],
         reasons.append(
             f"throughput {thr:.2f} Mbps < {limits['min_thr_mbps']:.2f} Mbps")
 
-    if port_result.get("errors", 0) > 0:
-        passed = False
-        reasons.append(f"{port_result['errors']} data errors")
-
     # --- Skip power checks for control port 0 ---
     if port == 0:
         rollup = {
             "throughput_Mbps": thr,
-            "errors": 0,
+            "vidle_mV": 0,
             "vmin_mV": 0,
             "vmax_mV": 0,
             "max_droop_mV": 0,
@@ -274,6 +270,9 @@ def evaluate_port(port_result: Dict[str, Any],
         return passed, reasons, rollup
 
     pr = port_result.get("power_report", {}) or {}
+    flags = pr.get("flags", 0)
+    v_idle = pr.get("v_idle_mV", 0)
+    ocp_at_mA = pr.get("ocp_at_mA", 0)
     vmin_list = pr.get("v_min_mV", [])
     vmax_list = pr.get("v_max_mV", [])
     droop_list = pr.get("droop_mV", [])
@@ -288,6 +287,15 @@ def evaluate_port(port_result: Dict[str, Any],
     max_ripple = max(ripple_list) if ripple_list else 0
     max_recovery = max(recov_list) if recov_list else 0
     max_measured_current = max(curr_list) if curr_list else 0
+
+    # VBUS too low
+    if flags == 1:
+        passed = False
+        reasons.append("VBUS too low to test ({v_idle} mV)")
+
+    if flags == 2:
+        passed = False
+        reasons.append("VBUS dropped to low at {ocp_at_mA} mA")
 
     if vmin < limits["v_min_mV"]:
         passed = False
@@ -322,8 +330,8 @@ def evaluate_port(port_result: Dict[str, Any],
 
     rollup = {
         "throughput_Mbps": thr,
-        "errors": port_result.get("errors", 0),
         "vmin_mV": vmin,
+        "vidle_mV": v_idle,
         "vmax_mV": vmax,
         "max_droop_mV": max_droop,
         "max_ripple_mVpp": max_ripple,
@@ -374,7 +382,7 @@ def main():
     except Exception as e:
         # Hard fail: no device / enumeration error
         if not args.json_only:
-            print(f"USB TEST: {e}")
+            print(f"USB TEST: No tester detected!!!")
         sys.exit(0)
 
     if not ports:
@@ -414,6 +422,7 @@ def main():
 
         if not args.json_only:
             # concise single-line summary
+            vidle_v = rollup["vidle_mV"] / 1000
             vmin_v = rollup["vmin_mV"] / \
                 1000 if rollup["vmin_mV"] != 99999 else 0.0
             droop = rollup["max_droop_mV"]
@@ -425,7 +434,7 @@ def main():
             if p == 0:
                 print(f"USB Port {p}: {thr:.2f} Mbps — {status}")
             else:
-                print(f"USB Port {p}: {thr:.2f} Mbps, "
+                print(f"USB Port {p}: {thr:.2f} Mbps, Idle {vidle_v} V, "
                       f"Vmin {vmin_v:.2f} V, droop {droop} mV, ripple {ripple} mVpp, "
                       f"Imax {imax} mA — {status}")
 

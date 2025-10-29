@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/ash
+#shellcheck shell=dash
 # /etc/local.d/run_diagnostic.start
 
 set -u
@@ -67,9 +68,15 @@ run_screen_test() {
     run_in_vt /home/ssh/binaries/screen_test
 }
 
-# Redirect stdout and stderr to /dev/tty1 for visibility
+# Redirect stdout and stderr to /dev/tty1 for visibility, and tee to a text output
 # Its needed because the script is run in a non-interactive environment so stdout is not set yet.
-exec > /dev/tty1 2>&1
+
+# Create a temporary FIFO for tee
+tmpf=/tmp/diag_fifo
+mkfifo "$tmpf"
+tee /root/diagnostic_report.txt <"$tmpf" >/dev/tty1 &
+exec >"$tmpf" 2>&1
+rm "$tmpf"
 
 # This script runs the diagnostic tests for the client application.
 print_green "Running diagnostic tests..."
@@ -106,13 +113,23 @@ print_green "Starting Memory/CPU Test with stress-ng"
 # fi
 
 print_green "Running Disk Selftest..."
-if ! python3 /home/ssh/python/disk_health.py
+if ! python /home/ssh/python/disk_health.py
 then
     print_red "Disk check failed."
     cleanup_abort_watcher
     exit 1
 else
     print_green "Disk selftest completed successfully"
+fi
+
+print_green "Running USB test..."
+if ! python /home/ssh/python/usb_test.py
+then
+    print_red "USB test failed."
+    cleanup_abort_watcher
+    exit 1
+else
+    print_green "USB test completed successfully"
 fi
 
 print_green "Battery Status:"
@@ -143,4 +160,7 @@ run_screen_test
 
 print_green "All tests completed. GTUA"
 
+# --- Clean up the log file (remove color codes) ---
+# Remove ANSI escape sequences like ^[[0;31m, etc.
+sed -i 's/\x1B\[[0-9;]*[A-Za-z]//g' /root/diagnostic_report.txt
 exit 0
