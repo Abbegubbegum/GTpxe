@@ -20,10 +20,17 @@ mkdir -p "$REPO_PATH"
 cd "$REPO_PATH" || exit
 
 apk update
-apk fetch --recursive memtester stress-ng smartmontools nvme-cli util-linux python3 acpi
+apk fetch --recursive memtester stress-ng smartmontools nvme-cli util-linux python3 acpi py3-usb
 apk index -o APKINDEX.tar.gz -- *.apk
 
 lbu add /var/custom-repo/
+
+# Because for some reason, pyusb fails to install
+mkdir -p /var/py3-usb
+cd /var/py3-usb || exit
+apk fetch py3-usb
+
+lbu add /var/py3-usb
 
 echo "Moving diagnostic startup scripts to /etc/local.d/..."
 # Add the diagnostic scripts
@@ -47,16 +54,8 @@ sed -i '/^http:\/\/dl-cdn/s|^|#|' /etc/apk/repositories
 echo "Adding our own reposity..."
 echo 'file:///var/custom-repo/main' >> /etc/apk/repositories
 
-echo "Removing default gateway (if any)..."
-# Remove default route (IPv4)
-ip route del default 2>/dev/null || true
-# Remove default route (IPv6, if present)
-ip -6 route del default 2>/dev/null || true
-
-echo "Verifying remaining network routes..."
-ip route show
-ip -6 route show
-
+echo "Removing 'gateway' entries from /etc/network/interfaces..."
+sed -i '/^\s*gateway\s\+/d' /etc/network/interfaces
 
 echo "Creating overlay backup package..."
 lbu pkg /home/ssh
