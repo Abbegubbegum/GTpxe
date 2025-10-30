@@ -38,6 +38,9 @@ start_abort_watcher() {
 
 cleanup_abort_watcher() {
     [ -n "$ABORT_WATCHER_PID" ] && kill "$ABORT_WATCHER_PID"
+    # --- Clean up the log file (remove color codes) ---
+    # Remove ANSI escape sequences like ^[[0;31m, etc.
+    sed -i 's/\x1B\[[0-9;]*[A-Za-z]//g' /root/diagnostic_report.txt
 }
 
 start_abort_watcher
@@ -92,25 +95,25 @@ print_green "Detected $CORE_COUNT CPU cores."
 
 print_green "Starting Memory/CPU Test with stress-ng"
 
-# if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
-# then
-#     print_red "Memory/CPU Test failed."
-# cleanup_abort_watcher
-#     exit 1
-# else
-#     print_green "Memory/CPU Test completed successfully."
-# fi
+if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
+then
+    print_red "Memory/CPU Test failed."
+    cleanup_abort_watcher
+    exit 1
+else
+    print_green "Memory/CPU Test completed successfully."
+fi
 
-# print_green "Running Memtest for memory testing..."
+print_green "Running Memtest for memory testing..."
 
-# if ! memtester 100M 1
-# then
-#     print_red "Memtest failed."
-# cleanup_abort_watcher
-#     exit 1
-# else
-#     print_green "Memtest completed successfully."
-# fi
+if ! memtester 100M 1
+then
+    print_red "Memtest failed."
+    cleanup_abort_watcher
+    exit 1
+else
+    print_green "Memtest completed successfully."
+fi
 
 print_green "Running Disk Selftest..."
 if ! python /home/ssh/python/disk_health.py
