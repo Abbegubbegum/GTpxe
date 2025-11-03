@@ -1,14 +1,11 @@
 #!ipxe
-
-# Init networking
+# ---------- Net init ----------
 dhcp
 
-# Check the firmware and architecture
+# ---------- Basic facts ----------
 cpuid --ext 29 && set arch x86_64 || set arch x86
-
 iseq ${platform} efi && set fw uefi || set fw bios
-
-echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}
+echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}  MAC: ${net0/mac}
 
 :menu
 menu Choose Architecture
@@ -16,32 +13,55 @@ item x86_64 Boot x86_64
 item x86 Boot x86
 choose --default ${arch} --timeout 5000 arch
 
-
-# Location for the boot files
-set server http://pxe-server/alpine/boot/${arch}
-
-# Location for the local package repo
-set alpine_repo http://pxe-server/alpine/apks
-
-# Kernel file
-set vmlinuz ${server}/vmlinuz-lts
-
-set initramfsfilename initramfs-lts
-set initramfs ${server}/${initramfsfilename}
-
-set modloop ${server}/modloop-lts
-
-set apkovl ${server}/localhost.apkovl.tar.gz
+# ---------- Where your stuff lives ----------
+# Change these to your actual hosts/paths
+set server             http://pxe-server
+set alpine_repo        ${server}/alpine/apks
+set alpine_boot        ${server}/alpine/boot/${arch}
+set vmlinuz            ${alpine_boot}/vmlinuz-lts
+set initramfs          ${alpine_boot}/initramfs-lts
+set initramfsfilename  initramfs-lts
+set modloop            ${alpine_boot}/modloop-lts
+set apkovl             ${alpine_boot}/localhost.apkovl.tar.gz
+set ipconfig           ip=dhcp
+# If you want the pxe client to have a static IP
+# set ipconfig         ip=192.168.150.105:::255.255.255.0:
 
 
-# IP config if you want a static ip
-#set ipconfig ip=192.168.150.105:::255.255.255.0:
+# Ask controller which default to use (memtest or alpine)
+# It will also tell us which memtest flavor to jump to on this platform.
+# Fallback default = alpine if controller is down.
+set def_target alpine
+set memtest_label memtest-bios
+iseq ${fw} uefi && set memtest_label memtest-uefi
 
-# If you want DHCP instead
-set ipconfig ip=dhcp
+chain --autofree ${server}/bootstage?mac=${net0/mac}\&fw=${fw} || goto menu
+
+# The controller will return inline iPXE "set def_target=<...>" lines.
 
 :menu
-menu Boot Menu
+menu PXE Boot
+item --gap -- ---------------------------------------------------------
+item --key m memtest Run Memory Test 
+item --key a alpine  Boot Alpine
+choose --default ${def_target} --timeout 5000 target || set target ${def_target}
+goto ${target}
+
+:memtest
+goto ${memtest_label}
+
+:memtest-uefi
+echo Booting MemTest86 (UEFI)...
+# NOTE: mt86.cfg must set AUTORUN=1 and EXITMODE=0 (reboot).
+chain ${server}/mt86/memtestx64.efi || goto menu
+
+:memtest-bios
+echo Booting memtest86+ (BIOS)...
+# If your binary name differs, adjust here.
+chain tftp://${server}/memtest86plus.0 || goto menu
+
+:alpine
+menu Overlay Menu
 item alpine-ovl   Boot with Overlay 
 item alpine-def   Boot without Overlay
 choose --default alpine-ovl --timeout 5000 target && goto ${target}

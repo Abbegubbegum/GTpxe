@@ -138,6 +138,13 @@ fi
 print_green "Battery Status:"
 acpi -V
 
+
+print_green "Temperatures:"
+for t in /sys/class/thermal/thermal_zone*/temp; do
+    name=$(basename "$(dirname "$t")")
+    echo "$name: $(($(cat "$t") / 1000))°C"
+done
+
 print_green "Test Serial Ports..."
 
 if ! /home/ssh/scripts/serial_test.sh
@@ -160,6 +167,18 @@ run_keyboard_test
 print_green "Running screen test..."
 
 run_screen_test
+
+print_green "Running speaker test..."
+
+# Set volume on regular soundcard
+amixer -c 0 sset Master 100% unmute
+amixer -c 0 sset PCM 100% unmute
+
+# Basic tone
+speaker-test -t sine -f 880 -l 1
+
+# Simple talking
+aplay /usr/share/sounds/alsa/Front_Center.wav
 
 print_green "All tests completed. GTUA"
 
