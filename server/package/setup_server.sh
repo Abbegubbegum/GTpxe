@@ -5,12 +5,14 @@ set -e
 # Disable systemd-resolved
 systemctl disable systemd-resolved
 systemctl stop systemd-resolved
+
+# Add DNS server
 rm -f /etc/resolv.conf
 echo "nameserver 1.1.1.1" > /etc/resolv.conf
 
 # Update and install necessary packages
 apt update
-apt install -y dnsmasq apache2
+apt install -y dnsmasq python3-venv python3-pip
 
 # Make the server directories
 mkdir -p /srv/tftp/
@@ -22,13 +24,17 @@ mkdir -p /srv/www/alpine/apks/x86
 # Configure dnsmasq
 cp ./conf/dnsmasq.conf /etc/dnsmasq.conf
 
-# Configure apache
-rm -rf /var/www/html
-ln -s /srv/www /var/www/html
-systemctl restart apache2
-systemctl enable apache2
+# Setup python http server
+cp -r ./python /srv/
+python3 -m venv /srv/python/.venv
+/srv/python/.venv/bin/pip install --upgrade pip
+/srv/python/.venv/bin/pip install flask gunicorn
+
+systemctl daemon-reload
+systemctl enable --now pxe-http
 
 # Download alpine images
+# We get these files from the netboot since they have NiC drivers included
 #64-bit
 wget -P /srv/www/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts
 wget -P /srv/www/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/initramfs-lts
@@ -39,6 +45,7 @@ wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-sta
 wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/modloop-lts
 
 # Download and extract necessary alpine apks from the .iso images
+# This we have to get from the regular .iso install
 #64-bit
 wget http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/alpine-standard-3.22.0-x86_64.iso
 mkdir -p /mnt/alpine-x64
@@ -56,10 +63,11 @@ umount /mnt/alpine-x86
 rm alpine-standard-3.22.0-x86.iso
 
 # Copy over overlay files
-cp -r ./boot/* /srv/www/alpine/boot/
+cp -r ./boot/http/* /srv/www/
 
-# Copy over ipxe file
-cp ./ipxe/boot.ipxe /srv/tftp/boot.ipxe
+# Copy over the tftp boot files
+#cp ./ipxe/boot.ipxe /srv/tftp/boot.ipxe
+cp ./boot/tftp/* /srv/tftp/
 
 # Configure network interfaces
 mv /etc/network/interfaces.d/eth0 /etc/network/interfaces.d/eth0.bak

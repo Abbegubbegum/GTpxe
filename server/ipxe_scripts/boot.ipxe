@@ -35,7 +35,7 @@ set def_target alpine
 set memtest_label memtest-bios
 iseq ${fw} uefi && set memtest_label memtest-uefi
 
-chain --autofree ${server}/bootstage?mac=${net0/mac}\&fw=${fw} || goto menu
+chain --autofree ${server}/bootstage?mac=${net0/mac} || goto menu
 
 # The controller will return inline iPXE "set def_target=<...>" lines.
 
@@ -51,14 +51,13 @@ goto ${target}
 goto ${memtest_label}
 
 :memtest-uefi
-echo Booting MemTest86 (UEFI)...
-# NOTE: mt86.cfg must set AUTORUN=1 and EXITMODE=0 (reboot).
-chain ${server}/mt86/memtestx64.efi || goto menu
+echo Booting memtest86+ (UEFI)...
+chain ${server}/mt86plus.efi || goto menu
 
 :memtest-bios
 echo Booting memtest86+ (BIOS)...
 # If your binary name differs, adjust here.
-chain tftp://${server}/memtest86plus.0 || goto menu
+chain tftp://pxe-server/mt86plus.bin || goto menu
 
 :alpine
 menu Overlay Menu

@@ -1,0 +1,20 @@
+[Unit]
+Description=PXE HTTP (Flask/gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/python
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/srv/python/.venv/bin/gunicorn -w 4 -b 0.0.0.0:80 pxe_http:app
+User=root
+Group=root
+# Allow binding to privileged port 80 even if you later drop privileges:
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
