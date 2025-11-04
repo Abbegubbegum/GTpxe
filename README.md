@@ -130,8 +130,8 @@ scp server/package/boot/x86/* tele@192.168.150.62:/srv/www/alpine/boot/x86/
 
 ## Setup PXE Server on Rock 4
 
-1. Download the ubuntu server preinstalled desktop image for Arm64
-   https://cdimage.ubuntu.com/releases/24.04.3/release/ubuntu-24.04.3-preinstalled-desktop-arm64+raspi.img.xz
+1. Download the ubuntu armbian community image for the Rock 4SE and flash it to an SD card
+   https://github.com/armbian/community/releases/download/25.11.0-trunk.413/Armbian_community_25.11.0-trunk.413_Rock-4se_trixie_current_6.12.57_minimal.img.xz
 
 On Linux:
 
@@ -139,47 +139,42 @@ On Linux:
 #Identify where the SD card is
 lsblk
 
-xzcat rock-4se_debian_bullseye_cli_b38.img.xz | sudo dd of=/dev/mmcblkX bs=4M status=progress conv=fsync
+xzcat rock-4se_debian_bullseye_cli_b38.img.xz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
 sync
 ```
 
-(Replace /dev/mmcblkX with what your sd card device is)
+(Replace /dev/sdX with what your sd card device is)
 
 2. Startup the Rock 4 and enable ssh
    Connect the sim-card, an ethernet cable and mouse & keyboard and then connect power to start it up.
 
-Login with user/pwd: rock/rock
+Setup root password 'opled' and user tele/opled
 
-setup the networking
-
-```sh
-sudo nano /etc/network/interfaces.d/eth0
-```
-
-```ini
-auto eth0
-iface eth0 inet static
-    address 192.168.150.30
-    netmask 255.255.255.0
-    gateway 192.168.150.254
-    dns-nameservers 1.1.1.1
-```
+setup the networking and keyboard with
 
 ```sh
-sudo systemctl restart networking
+armbian-config
+```
+
+I use static ip 192.168.150.30 for the setup
+After you set the ip, you have to select "drop the fallback DHCP configuration" to apply the settings
+
+3. Start ssh
+
+```sh
 sudo systemctl enable ssh
 sudo systemctl start ssh
 ```
 
-Now you can connect to the Rock with SSH with the user Rock@192.168.150.30
+Now you can connect to the Rock with SSH with the user tele@192.168.150.30
 
 3. Setup the DHCP, tftp and http servers
    Copy over the server/package folder and run the script
 
 ```sh
-scp -r ./server/package rock@192.168.150.30:~/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ./server/package tele@192.168.150.30:~/
 ssh rock@192.168.150.30
-cd package
+cd /home/tele/package
 sudo chmod +x ./setup_server.sh
 sudo ./setup_server.sh
 ```
