@@ -7,15 +7,17 @@ cpuid --ext 29 && set arch x86_64 || set arch x86
 iseq ${platform} efi && set fw uefi || set fw bios
 echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}  MAC: ${net0/mac}
 
-:menu
+:arch_menu
 menu Choose Architecture
 item x86_64 Boot x86_64
 item x86 Boot x86
-choose --default ${arch} --timeout 5000 arch
+choose --default ${arch} --timeout 5000 arch || goto arch_menu
+echo DEBUG: Architecture chosen: ${arch}
 
 # ---------- Where your stuff lives ----------
 # Change these to your actual hosts/paths
-set server             http://pxe-server
+echo DEBUG: Setting up server variables...
+set server             http://192.168.150.62
 set alpine_repo        ${server}/alpine/apks
 set alpine_boot        ${server}/alpine/boot/${arch}
 set vmlinuz            ${alpine_boot}/vmlinuz-lts
@@ -26,25 +28,41 @@ set apkovl             ${alpine_boot}/localhost.apkovl.tar.gz
 set ipconfig           ip=dhcp
 # If you want the pxe client to have a static IP
 # set ipconfig         ip=192.168.150.105:::255.255.255.0:
+echo DEBUG: Server variables set. alpine_boot=${alpine_boot}
 
 
 # Ask controller which default to use (memtest or alpine)
 # It will also tell us which memtest flavor to jump to on this platform.
 # Fallback default = alpine if controller is down.
+echo DEBUG: Setting boot targets...
 set def_target alpine
+echo DEBUG: def_target set to alpine
 set memtest_label memtest-bios
-iseq ${fw} uefi && set memtest_label memtest-uefi
+echo DEBUG: memtest_label set to memtest-bios
+iseq ${fw} uefi && set memtest_label memtest-uefi ||
+echo DEBUG: Boot targets set. def_target=${def_target}, memtest_label=${memtest_label}
 
-chain --autofree ${server}/bootstage?mac=${net0/mac} || goto menu
+echo DEBUG: About to contact server at ${server}/bootstage?mac=${net0/mac}
+chain --autofree ${server}/bootstage?mac=${net0/mac} || goto failed_bootstage
+echo DEBUG: Successfully contacted server, def_target=${def_target}
+goto menu
+
+:failed_bootstage
+echo DEBUG: Failed to contact controller at ${server}/bootstage
+echo DEBUG: Using fallback def_target=${def_target}
+prompt Press any key to continue...
+goto menu
 
 # The controller will return inline iPXE "set def_target=<...>" lines.
 
 :menu
+echo DEBUG: Entering PXE Boot menu with def_target=${def_target}
 menu PXE Boot
 item --gap -- ---------------------------------------------------------
-item --key m memtest Run Memory Test 
+item --key m memtest Run Memory Test
 item --key a alpine  Boot Alpine
 choose --default ${def_target} --timeout 5000 target || set target ${def_target}
+echo DEBUG: Target chosen: ${target}
 goto ${target}
 
 :memtest
@@ -57,7 +75,7 @@ chain ${server}/mt86plus.efi || goto menu
 :memtest-bios
 echo Booting memtest86+ (BIOS)...
 # If your binary name differs, adjust here.
-chain tftp://pxe-server/mt86plus.bin || goto menu
+chain tftp://192.168.150.62/mt86plus.bin || goto menu
 
 :alpine
 menu Overlay Menu
