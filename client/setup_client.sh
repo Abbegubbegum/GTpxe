@@ -25,13 +25,6 @@ apk index -o APKINDEX.tar.gz -- *.apk
 
 lbu add /var/custom-repo/
 
-# Because for some reason, pyusb fails to install
-mkdir -p /var/py3-usb
-cd /var/py3-usb || exit
-apk fetch py3-usb
-
-lbu add /var/py3-usb
-
 echo "Moving diagnostic startup scripts to /etc/local.d/..."
 # Add the diagnostic scripts
 mv /home/ssh/startup/* /etc/local.d/
