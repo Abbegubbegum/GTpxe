@@ -77,5 +77,5 @@ tar -czf ../x86_64.apkovl.tar.gz .
 cd ../x86
 tar -czf ../x86.apkovl.tar.gz .
 cd ../../..
-cp client/overlays/x86_64.apkovl.tar.gz server/package/boot/http/alpine/boot/x86_64/localhost.apkovl.tar.gz
-cp client/overlays/x86.apkovl.tar.gz server/package/boot/http/alpine/boot/x86/localhost.apkovl.tar.gz
+cp client/overlays/x86_64.apkovl.tar.gz server/package/srv/http/alpine/boot/x86_64/localhost.apkovl.tar.gz
+cp client/overlays/x86.apkovl.tar.gz server/package/srv/http/alpine/boot/x86/localhost.apkovl.tar.gz

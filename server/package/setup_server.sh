@@ -75,6 +75,9 @@ fi
 # Copy over the server files
 cp -r ./srv /srv/
 
+# Set permissions for /srv directory to allow all users to write
+chmod -R 777 /srv
+
 # Setup python http server
 python3 -m venv /srv/python/.venv
 /srv/python/.venv/bin/pip install --upgrade pip

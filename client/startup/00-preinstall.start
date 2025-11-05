@@ -12,12 +12,13 @@ echo "[preinstall] Installing packages..."
 apk update --allow-untrusted
 
 if apk add --allow-untrusted memtester stress-ng smartmontools nvme-cli util-linux python3 acpi libusb alsa-utils; then
-    # For some reason, py3-usb cant be installed from the index, but can be force installed
-    apk add /var/py3-usb/py3-usb-1.3.1-r0.apk
     echo "[preinstall] Install completed successfully"
 else
     echo "[preinstall] ERROR: Install failed"
 fi
+
+# For some reason, py3-usb cant be installed from the index, but can be force installed
+apk add /var/py3-usb/py3-usb-1.3.1-r0.apk
 
 echo "[preinstall] Done."
 exit 0

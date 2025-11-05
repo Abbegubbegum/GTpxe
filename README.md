@@ -196,8 +196,8 @@ This packages the boot files for both architectures into `server/package/boot/`.
 Copy the overlay files to your PXE server (replace `192.168.150.62` with your server's IP):
 
 ```sh
-scp server/package/boot/x86_64/* tele@192.168.150.62:/srv/http/alpine/boot/x86_64/
-scp server/package/boot/x86/* tele@192.168.150.62:/srv/http/alpine/boot/x86/
+scp server/package/srv/http/alpine/boot/x86_64/* tele@192.168.150.62:/srv/http/alpine/boot/x86_64/
+scp server/package/srv/http/alpine/boot/x86/* tele@192.168.150.62:/srv/http/alpine/boot/x86/
 ```
 
 The overlays will be served via HTTP during PXE boot.

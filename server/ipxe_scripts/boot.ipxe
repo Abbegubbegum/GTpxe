@@ -9,6 +9,7 @@ echo CPU: ${arch}  FW: ${fw}  PLATFORM: ${platform}  MAC: ${net0/mac}
 
 :arch_menu
 menu Choose Architecture
+item --gap -- ---------------------------------------------------------
 item x86_64 Boot x86_64
 item x86 Boot x86
 choose --default ${arch} --timeout 5000 arch || goto arch_menu
@@ -79,6 +80,7 @@ chain tftp://192.168.150.62/mt86plus.bin || goto menu
 
 :alpine
 menu Overlay Menu
+item --gap -- ---------------------------------------------------------
 item alpine-ovl   Boot with Overlay 
 item alpine-def   Boot without Overlay
 choose --default alpine-ovl --timeout 5000 target && goto ${target}
