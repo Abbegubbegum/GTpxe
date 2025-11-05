@@ -301,10 +301,10 @@ sudo systemctl start ssh
 
 ### Step 2: Deploy and Run Setup Script
 
-**On your host computer**, copy the server package (replace `192.168.150.30` with your Ubuntu server's IP):
+**On your host computer**, copy the server package (replace `192.168.150.62` with your Ubuntu server's IP):
 
 ```sh
-scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ./server/package tele@192.168.150.30:~/
+scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ./server/package tele@192.168.150.62:~/
 ```
 
 **On the Ubuntu server** (via SSH), run the setup script with the `--type ubuntu` flag:

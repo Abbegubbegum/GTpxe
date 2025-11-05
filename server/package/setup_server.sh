@@ -58,10 +58,10 @@ fi
 
 # Make the server directories
 mkdir -p /srv/tftp/
-mkdir -p /srv/www/alpine/boot/x86_64
-mkdir -p /srv/www/alpine/boot/x86
-mkdir -p /srv/www/alpine/apks/x86_64
-mkdir -p /srv/www/alpine/apks/x86
+mkdir -p /srv/http/alpine/boot/x86_64
+mkdir -p /srv/http/alpine/boot/x86
+mkdir -p /srv/http/alpine/apks/x86_64
+mkdir -p /srv/http/alpine/apks/x86
 
 # Configure TFTP server based on type
 if [ "$SERVER_TYPE" = "rock" ]; then
@@ -72,8 +72,10 @@ else
     cp ./conf/ubuntu/tftpd-hpa /etc/default/
 fi
 
+# Copy over the server files
+cp -r ./srv /srv/
+
 # Setup python http server
-cp -r ./python /srv/
 python3 -m venv /srv/python/.venv
 /srv/python/.venv/bin/pip install --upgrade pip
 /srv/python/.venv/bin/pip install flask gunicorn
@@ -86,13 +88,13 @@ systemctl enable --now pxe-http
 # Download alpine images
 # We get these files from the netboot since they have NiC drivers included
 #64-bit
-wget -P /srv/www/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts
-wget -P /srv/www/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/initramfs-lts
-wget -P /srv/www/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/modloop-lts
+wget -P /srv/http/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/vmlinuz-lts
+wget -P /srv/http/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/initramfs-lts
+wget -P /srv/http/alpine/boot/x86_64 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/netboot/modloop-lts
 #32-bit
-wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/vmlinuz-lts
-wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/initramfs-lts
-wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/modloop-lts
+wget -P /srv/http/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/vmlinuz-lts
+wget -P /srv/http/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/initramfs-lts
+wget -P /srv/http/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/netboot/modloop-lts
 
 # Download and extract necessary alpine apks from the .iso images
 # This we have to get from the regular .iso install
@@ -100,7 +102,7 @@ wget -P /srv/www/alpine/boot/x86 http://dl-cdn.alpinelinux.org/alpine/latest-sta
 wget http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86_64/alpine-standard-3.22.0-x86_64.iso
 mkdir -p /mnt/alpine-x64
 mount -o loop alpine-standard-3.22.0-x86_64.iso /mnt/alpine-x64
-cp -a /mnt/alpine-x64/apks/x86_64/* /srv/www/alpine/apks/x86_64/
+cp -a /mnt/alpine-x64/apks/x86_64/* /srv/http/alpine/apks/x86_64/
 umount /mnt/alpine-x64
 rm alpine-standard-3.22.0-x86_64.iso
 
@@ -108,12 +110,9 @@ rm alpine-standard-3.22.0-x86_64.iso
 wget http://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/x86/alpine-standard-3.22.0-x86.iso
 mkdir -p /mnt/alpine-x86
 mount -o loop alpine-standard-3.22.0-x86.iso /mnt/alpine-x86
-cp -a /mnt/alpine-x86/apks/x86/* /srv/www/alpine/apks/x86/
+cp -a /mnt/alpine-x86/apks/x86/* /srv/http/alpine/apks/x86/
 umount /mnt/alpine-x86
 rm alpine-standard-3.22.0-x86.iso
-
-# Copy over overlay files
-cp -r ./boot/* /srv/
 
 # Configure network and start services based on server type
 if [ "$SERVER_TYPE" = "rock" ]; then
