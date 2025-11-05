@@ -4,6 +4,7 @@ import shelve
 import os
 import pathlib
 import logging
+from datetime import date
 
 ROOT = pathlib.Path("/srv")
 STATIC_DIR = ROOT / "http"         # all your static boot files
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 @app.before_request
 def log_request():
     logger.info(
-        f"Request: {request.method} {request.path} from {request.remote_addr} | Query: {dict(request.args)}")
+        f"Request: {request.method} {request.path} from {request.remote_addr}")
 
 
 def ipxe(text: str) -> Response:
@@ -42,16 +43,24 @@ def bootstage():
             "No MAC address provided, returning default alpine target")
         return ipxe("set def_target alpine")
 
+    today = date.today().isoformat()
+
     with shelve.open(str(DB_PATH)) as db:
-        entry = db.get(mac, {"ran_memtest": False})
-        if entry.get("ran_memtest"):
+        entry = db.get(mac, {})
+        last_test_date = entry.get("last_memtest_date")
+
+        if last_test_date == today:
             logger.info(
-                f"MAC {mac} has already run memtest, returning alpine target")
+                f"MAC {mac} already ran memtest today ({today}), returning alpine target")
             return ipxe("set def_target alpine")
         else:
-            logger.info(
-                f"MAC {mac} hasn't run memtest yet, marking as run and returning memtest target")
-            entry["ran_memtest"] = True
+            if last_test_date:
+                logger.info(
+                    f"MAC {mac} last tested on {last_test_date}, running memtest again for today ({today})")
+            else:
+                logger.info(
+                    f"MAC {mac} hasn't run memtest yet, running memtest for today ({today})")
+            entry["last_memtest_date"] = today
             db[mac] = entry
             return ipxe("set def_target memtest")
 
