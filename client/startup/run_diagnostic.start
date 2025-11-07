@@ -146,6 +146,10 @@ fi
 print_green "ACPI Status:"
 acpi -V
 
+for fan in /sys/class/hwmon/hwmon*/fan*_input; do
+    [ -f "$fan" ] && echo "$(basename "$fan"): $(cat "$fan") RPM"
+done
+
 print_green "Test Serial Ports..."
 
 if ! /home/ssh/scripts/serial_test.sh
