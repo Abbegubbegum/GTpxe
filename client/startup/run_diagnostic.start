@@ -38,9 +38,6 @@ start_abort_watcher() {
 
 cleanup_abort_watcher() {
     [ -n "$ABORT_WATCHER_PID" ] && kill "$ABORT_WATCHER_PID"
-    # --- Clean up the log file (remove color codes) ---
-    # Remove ANSI escape sequences like ^[[0;31m, etc.
-    sed -i 's/\x1B\[[0-9;]*[A-Za-z]//g' /root/diagnostic_report.txt
 }
 
 start_abort_watcher
@@ -71,6 +68,21 @@ run_screen_test() {
     run_in_vt /home/ssh/binaries/screen_test
 }
 
+exit_program() {
+    cleanup_abort_watcher
+    cleanup_log_file
+    exit 1
+}
+
+cleanup_log_file() {
+    # --- Clean up the log file (remove color codes) ---
+    # Remove ANSI escape sequences like ^[[0;31m, etc.
+    sed -i 's/\x1B\[[0-9;]*[A-Za-z]//g' /root/diagnostic_report.txt
+    
+    # Remove all of the progress indications from memtester and only keep ok
+    sed -i 's/: .*ok$/: ok/' /root/diagnostic_report.txt
+}
+
 # Redirect stdout and stderr to /dev/tty1 for visibility, and tee to a text output
 # Its needed because the script is run in a non-interactive environment so stdout is not set yet.
 
@@ -98,8 +110,7 @@ print_green "Starting Memory/CPU Test with stress-ng"
 if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
 then
     print_red "Memory/CPU Test failed."
-    cleanup_abort_watcher
-    exit 1
+    exit_program
 else
     print_green "Memory/CPU Test completed successfully."
 fi
@@ -109,8 +120,7 @@ print_green "Running Memtest for memory testing..."
 if ! memtester 100M 1
 then
     print_red "Memtest failed."
-    cleanup_abort_watcher
-    exit 1
+    exit_program
 else
     print_green "Memtest completed successfully."
 fi
@@ -119,8 +129,7 @@ print_green "Running Disk Selftest..."
 if ! python /home/ssh/python/disk_health.py
 then
     print_red "Disk check failed."
-    cleanup_abort_watcher
-    exit 1
+    exit_program
 else
     print_green "Disk selftest completed successfully"
 fi
@@ -129,35 +138,50 @@ print_green "Running USB test..."
 if ! python /home/ssh/python/usb_test.py
 then
     print_red "USB test failed."
-    cleanup_abort_watcher
-    exit 1
+    exit_program
 else
     print_green "USB test completed successfully"
 fi
 
-print_green "Battery Status:"
+print_green "ACPI Status:"
 acpi -V
-
-
-print_green "Temperatures:"
-for t in /sys/class/thermal/thermal_zone*/temp; do
-    name=$(basename "$(dirname "$t")")
-    echo "$name: $(($(cat "$t") / 1000))°C"
-done
 
 print_green "Test Serial Ports..."
 
 if ! /home/ssh/scripts/serial_test.sh
 then
     print_red "Serial test possible failure."
-    # Don't exit here because for the DBF, there are serial port chips that are not connected to anything.
+    # Don't exit here because there are serial port chips that are not connected to anything.
     # It fails but its expected.
     #exit 1
 else
     print_green "Serial test completed successfully."
 fi
 
-#Kill the watcher before starting the keyboard test
+
+print_green "Running GPS Test..."
+# Check if USB device exists
+if [ -e /dev/ttyACM0 ]; then
+    # Start gpsd daemon
+    if gpsd /dev/ttyACM0 -n -F /var/run/gpsd.sock; then
+        sleep 2
+        # Verify gpsd is actually receiving GPS data
+        if gpspipe -w -n 5 2>/dev/null | grep -q "TPV\|SKY"; then
+            # Run gpsmon in a separate VT to avoid disrupting output
+            run_in_vt gpsmon
+            print_green "GPS test completed."
+        else
+            print_red "GPS device found but not responding - skipping GPS test."
+            killall gpsd 2>/dev/null || true
+        fi
+    else
+        print_red "Failed to start gpsd - skipping GPS test."
+    fi
+else
+    print_red "GPS device not found at /dev/ttyACM0 - skipping GPS test."
+fi
+
+#Kill the watcher before starting the interactive tests
 cleanup_abort_watcher
 
 print_green "Running Keyboard Test..."
@@ -170,19 +194,24 @@ run_screen_test
 
 print_green "Running speaker test..."
 
-# Set volume on regular soundcard
-amixer -c 0 sset Master 100% unmute
-amixer -c 0 sset PCM 100% unmute
-
-# Basic tone
-speaker-test -t sine -f 880 -l 1
-
-# Simple talking
-aplay /usr/share/sounds/alsa/Front_Center.wav
+# Check if there are any sound cards available
+if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
+    # Set volume on soundcard
+    amixer -c 0 sset Master 50% unmute 2>/dev/null || true
+    amixer -c 0 sset PCM 50% unmute 2>/dev/null || truels
+    
+    # Basic tone
+    speaker-test -t sine -f 880 -l 1
+    
+    # Simple talking
+    aplay /usr/share/sounds/alsa/Front_Center.wav
+    
+    print_green "Speaker test completed."
+else
+    print_red "No sound cards found - skipping speaker test."
+fi
 
 print_green "All tests completed. GTUA"
 
-# --- Clean up the log file (remove color codes) ---
-# Remove ANSI escape sequences like ^[[0;31m, etc.
-sed -i 's/\x1B\[[0-9;]*[A-Za-z]//g' /root/diagnostic_report.txt
+cleanup_log_file
 exit 0

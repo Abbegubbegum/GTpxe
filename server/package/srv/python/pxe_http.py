@@ -9,6 +9,7 @@ from datetime import date
 ROOT = pathlib.Path("/srv")
 STATIC_DIR = ROOT / "http"         # all your static boot files
 DB_PATH = ROOT / "bootstage.db"    # tiny state per MAC
+LOG_FILE = ROOT / "pxe_http.log"   # log file path
 
 app = Flask(__name__, static_url_path="", static_folder=str(STATIC_DIR))
 
@@ -19,6 +20,15 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Add file handler for logging to file
+file_handler = logging.FileHandler(LOG_FILE)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+))
+logger.addHandler(file_handler)
 
 
 @app.before_request
