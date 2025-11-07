@@ -172,7 +172,7 @@ if [ -e /dev/ttyACM0 ]; then
         # Verify gpsd is actually receiving GPS data
         if gpspipe -w -n 5 2>/dev/null | grep -q "TPV\|SKY"; then
             # Run gpsmon in a separate VT to avoid disrupting output
-            run_in_vt gpsmon
+            run_in_vt cgps
             print_green "GPS test completed."
         else
             print_red "GPS device found but not responding - skipping GPS test."
