@@ -231,7 +231,7 @@ sync
 
 ### Step 2: Initial Boot and Configuration
 
-1. Insert the SD card, connect ethernet cable and keyboard, then power on the Rock 4SE
+1. Insert the SD card, connect ethernet cable, HDMI, and keyboard, then power on the Rock 4SE
 2. On first boot, you'll be prompted to create accounts:
 
     - **Root password**: `opled`
@@ -248,6 +248,10 @@ Navigate to **Network** settings and configure:
 -   **Static IP**: `192.168.150.30` (or your preferred IP)
 -   After setting the IP, select **"Drop the fallback DHCP configuration"** to apply changes
 
+Navigate to **Keyboard Layout** settings and configure:
+
+-   **Keyboard Layout**: `Swedish > Swedish`, the rest default
+
 ### Step 3: Enable SSH
 
 Start and enable the SSH service:
@@ -257,7 +261,7 @@ sudo systemctl enable ssh
 sudo systemctl start ssh
 ```
 
-You can now connect remotely: `ssh tele@192.168.150.30`
+You can now connect remotely to: `tele@192.168.150.30`
 
 ### Step 4: Deploy PXE Server Software
 
@@ -267,7 +271,7 @@ You can now connect remotely: `ssh tele@192.168.150.30`
 scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ./server/package tele@192.168.150.30:~/
 ```
 
-**On the Rock 4SE** (via SSH), run the setup script:
+**On the Rock 4SE** , run the setup script:
 
 ```sh
 cd /home/tele/package

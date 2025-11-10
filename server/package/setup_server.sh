@@ -39,18 +39,14 @@ echo "Installing PXE server with type: $SERVER_TYPE"
 if [ "$SERVER_TYPE" = "rock" ]; then
     systemctl disable systemd-resolved 2>/dev/null || true
     systemctl stop systemd-resolved 2>/dev/null || true
-    
-    # Add DNS server (Armbian uses systemd-resolved less often, but this is still safe)
-    rm -f /etc/resolv.conf
-    echo "nameserver 1.1.1.1" > /etc/resolv.conf
 fi
 
 # Update and install necessary packages
 apt update
 
 if [ "$SERVER_TYPE" = "rock" ]; then
-    # Rock: Install dnsmasq for DHCP+DNS+TFTP
-    apt install -y dnsmasq python3-venv python3-pip
+    # Rock: Install dnsmasq for DHCP+DNS+TFTP and netplan for network configuration
+    apt install -y dnsmasq netplan.io python3-venv python3-pip
 else
     # Ubuntu: Install standalone TFTP server (no DHCP/DNS)
     apt install -y tftpd-hpa python3-venv python3-pip
@@ -63,17 +59,8 @@ mkdir -p /srv/http/alpine/boot/x86
 mkdir -p /srv/http/alpine/apks/x86_64
 mkdir -p /srv/http/alpine/apks/x86
 
-# Configure TFTP server based on type
-if [ "$SERVER_TYPE" = "rock" ]; then
-    # Rock: Configure dnsmasq for DHCP+DNS+TFTP
-    cp ./conf/armbian/dnsmasq.conf /etc/dnsmasq.conf
-else
-    # Ubuntu: Configure standalone TFTP server (tftpd-hpa)
-    cp ./conf/ubuntu/tftpd-hpa /etc/default/
-fi
-
 # Copy over the server files
-cp -r ./srv /srv/
+cp -r ./srv/* /srv/
 
 # Set permissions for /srv directory to allow all users to write
 chmod -R 777 /srv
@@ -122,7 +109,7 @@ if [ "$SERVER_TYPE" = "rock" ]; then
     # Rock: Configure network interfaces to switch from setup network (192.168.150.x) to PXE server network (192.168.200.x)
     # Armbian uses netplan for network configuration
     # Backup the current netplan configuration
-    mv /etc/netplan/*.yaml /etc/netplan/01-netcfg.yaml.bak 2>/dev/null || true
+    rm -rf /etc/netplan/*.yaml 2>/dev/null || true
     
     # Create new netplan configuration for PXE server network (192.168.200.1)
     cp ./conf/armbian/01-netcfg.yaml /etc/netplan/
@@ -130,12 +117,18 @@ if [ "$SERVER_TYPE" = "rock" ]; then
     # Set correct permissions for netplan (must be 600 or 644 with no world-readable secrets)
     chmod 600 /etc/netplan/01-netcfg.yaml
     
+    # Apply netplan configuration
+    netplan apply
+    
+    cp ./conf/armbian/dnsmasq.conf /etc/dnsmasq.conf
+    
+    # Create dnsmasq run directory if it doesn't exist
+    mkdir -p /run/dnsmasq
+    
     # Start dnsmasq (DHCP+DNS+TFTP)
     systemctl restart dnsmasq
     systemctl enable dnsmasq
     
-    # Apply netplan configuration
-    netplan apply
     
     echo ""
     echo "==================================================================="
@@ -145,6 +138,8 @@ if [ "$SERVER_TYPE" = "rock" ]; then
     echo "Services running: DHCP, DNS, TFTP, HTTP"
     echo "==================================================================="
 else
+    
+    cp ./conf/ubuntu/tftpd-hpa /etc/default/
     # Ubuntu: No network configuration changes needed
     # Start standalone TFTP server
     systemctl restart tftpd-hpa
