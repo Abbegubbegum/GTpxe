@@ -103,7 +103,6 @@ sleep 2
 printf "\n"
 # Get core count
 CORE_COUNT=$(nproc)
-print_green "Detected $CORE_COUNT CPU cores."
 
 print_green "Starting Memory/CPU Test with stress-ng"
 
@@ -188,11 +187,7 @@ fi
 #Kill the watcher before starting the interactive tests
 cleanup_abort_watcher
 
-print_green "Running Keyboard Test..."
-
 run_keyboard_test
-
-print_green "Running screen test..."
 
 run_screen_test
 
@@ -202,13 +197,13 @@ print_green "Running speaker test..."
 if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
     # Set volume on soundcard
     amixer -c 0 sset Master 50% unmute 2>/dev/null || true
-    amixer -c 0 sset PCM 50% unmute 2>/dev/null || truels
+    amixer -c 0 sset PCM 50% unmute 2>/dev/null || true
     
     # Basic tone
-    speaker-test -t sine -f 880 -l 1
+    speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1
     
     # Simple talking
-    aplay /usr/share/sounds/alsa/Front_Center.wav
+    aplay /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1
     
     print_green "Speaker test completed."
 else
