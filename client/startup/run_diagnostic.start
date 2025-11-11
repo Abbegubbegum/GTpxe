@@ -196,8 +196,8 @@ print_green "Running speaker test..."
 # Check if there are any sound cards available
 if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
     # Set volume on soundcard
-    amixer -c 0 sset Master 50% unmute 2>/dev/null || true
-    amixer -c 0 sset PCM 50% unmute 2>/dev/null || true
+    amixer -c 0 sset Master 100% unmute >/dev/null || true
+    amixer -c 0 sset PCM 100% unmute >/dev/null || true
     
     # Basic tone
     speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1

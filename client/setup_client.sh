@@ -44,10 +44,10 @@ chmod +x /home/ssh/scripts/*
 mv /home/ssh/scripts/restart_test.sh /root
 lbu add /root
 
-echo "Disabling online APK repositories..."
-sed -i '/^http:\/\/dl-cdn/s|^|#|' /etc/apk/repositories
+echo "Disabling old APK repositories..."
+sed -i 's|^|#|' /etc/apk/repositories
 
-echo "Adding our own reposity..."
+echo "Adding our own local reposity..."
 echo 'file:///var/custom-repo/main' >> /etc/apk/repositories
 
 echo "Removing 'gateway' entries from /etc/network/interfaces..."
@@ -56,4 +56,4 @@ sed -i '/^\s*gateway\s\+/d' /etc/network/interfaces
 echo "Creating overlay backup package..."
 lbu pkg /home/ssh
 
-echo "Setup complete. The client environment is now ready."
+echo "Setup complete. The client environment is now packaged and ready."

@@ -35,12 +35,6 @@ fi
 
 echo "Installing PXE server with type: $SERVER_TYPE"
 
-# Disable systemd-resolved for Rock setup (Ubuntu may keep its DNS settings)
-if [ "$SERVER_TYPE" = "rock" ]; then
-    systemctl disable systemd-resolved 2>/dev/null || true
-    systemctl stop systemd-resolved 2>/dev/null || true
-fi
-
 # Update and install necessary packages
 apt update
 
@@ -108,7 +102,7 @@ rm alpine-standard-3.22.0-x86.iso
 if [ "$SERVER_TYPE" = "rock" ]; then
     # Rock: Configure network interfaces to switch from setup network (192.168.150.x) to PXE server network (192.168.200.x)
     # Armbian uses netplan for network configuration
-    # Backup the current netplan configuration
+    # Remove the old network configs
     rm -rf /etc/netplan/*.yaml 2>/dev/null || true
     
     # Create new netplan configuration for PXE server network (192.168.200.1)
@@ -122,8 +116,10 @@ if [ "$SERVER_TYPE" = "rock" ]; then
     
     cp ./conf/armbian/dnsmasq.conf /etc/dnsmasq.conf
     
-    # Create dnsmasq run directory if it doesn't exist
-    mkdir -p /run/dnsmasq
+    # Disable systemd-resolved to avoid port 53 conflict with dnsmasq
+    # This is done last, after all downloads and installations are complete
+    systemctl disable systemd-resolved 2>/dev/null || true
+    systemctl stop systemd-resolved 2>/dev/null || true
     
     # Start dnsmasq (DHCP+DNS+TFTP)
     systemctl restart dnsmasq

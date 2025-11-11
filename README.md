@@ -257,8 +257,8 @@ Navigate to **Keyboard Layout** settings and configure:
 Start and enable the SSH service:
 
 ```sh
-sudo systemctl enable ssh
-sudo systemctl start ssh
+systemctl enable ssh
+systemctl start ssh
 ```
 
 You can now connect remotely to: `tele@192.168.150.30`
@@ -275,8 +275,8 @@ scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r ./server/pack
 
 ```sh
 cd /home/tele/package
-sudo chmod +x ./setup_server.sh
-sudo ./setup_server.sh
+chmod +x setup_server.sh
+./setup_server.sh
 ```
 
 This script installs and configures:
