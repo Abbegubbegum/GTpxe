@@ -111,17 +111,42 @@ if [ "$SERVER_TYPE" = "rock" ]; then
     # Set correct permissions for netplan (must be 600 or 644 with no world-readable secrets)
     chmod 600 /etc/netplan/01-netcfg.yaml
     
-    # Apply netplan configuration
-    netplan apply
-    
-    cp ./conf/armbian/dnsmasq.conf /etc/dnsmasq.conf
-    
     # Disable systemd-resolved to avoid port 53 conflict with dnsmasq
-    # This is done last, after all downloads and installations are complete
+    # This is done before netplan apply to ensure clean network configuration
     systemctl disable systemd-resolved 2>/dev/null || true
     systemctl stop systemd-resolved 2>/dev/null || true
-    
+
+    # Apply netplan configuration
+    netplan apply
+
+    # IMPORTANT: Disable and mask systemd-networkd-wait-online AFTER netplan apply
+    # netplan apply can re-enable this service, so we must disable it afterwards
+    # This service waits for network interfaces to be "online" (carrier detected), which is unnecessary
+    # for our use case and causes multi-minute boot delays when the ethernet port is unplugged
+    systemctl disable systemd-networkd-wait-online.service 2>/dev/null || true
+    systemctl mask systemd-networkd-wait-online.service 2>/dev/null || true
+
+    cp ./conf/armbian/dnsmasq.conf /etc/dnsmasq.conf
+
+    # Configure dnsmasq to start after network is configured but not wait for carrier
+    # Create a systemd override to ensure dnsmasq starts after networkd has configured the interface
+    mkdir -p /etc/systemd/system/dnsmasq.service.d
+    cp ./conf/armbian/dnsmasq-override.conf /etc/systemd/system/dnsmasq.service.d/override.conf
+
+    # Set up systemd path unit to automatically restart dnsmasq when interface comes up
+    # This monitors /sys/class/net/end0 and triggers a restart when ethernet cable is plugged in
+    cp ./conf/armbian/dnsmasq-ifup.path /etc/systemd/system/
+    cp ./conf/armbian/dnsmasq-ifup.service /etc/systemd/system/
+
+    # Reload systemd to pick up the override and new units
+    systemctl daemon-reload
+
+    # Enable the path unit to monitor for interface changes
+    systemctl enable dnsmasq-ifup.path
+    systemctl start dnsmasq-ifup.path
+
     # Start dnsmasq (DHCP+DNS+TFTP)
+    # This may fail if interface is not available, but will auto-restart when cable is plugged in
     systemctl restart dnsmasq
     systemctl enable dnsmasq
     

@@ -1,0 +1,12 @@
+[Unit]
+Description=Monitor network interface for dnsmasq
+# Monitor when the network interface end0 becomes available
+
+[Path]
+# Watch for the interface to appear in /sys/class/net/
+PathExists=/sys/class/net/end0
+# Also watch for carrier (link) state changes
+PathModified=/sys/class/net/end0/carrier
+
+[Install]
+WantedBy=multi-user.target
