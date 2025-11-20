@@ -5,17 +5,42 @@ import time
 import struct
 import json
 import sys
-import argparse
 from typing import Dict, Any, List, Tuple
 
-# ---------------------- Defaults (generous) ----------------------
-DEFAULT_MIN_THR_MBPS = 1.4      # worst seen was 1.5 Mbps → set floor at 1.5
-DEFAULT_V_MIN_MV = 4600     # 4.6 V
-DEFAULT_V_MAX_MV = 5500     # 5.5 V
-DEFAULT_MAX_DROOP_MV = 600
-DEFAULT_MAX_RIPPLE_MVPP = 250
-DEFAULT_MAX_RECOVERY_US = 5
-DEFAULT_MIN_MAX_CURRENT_MA = 400
+# ---------------------- Test Limits ----------------------
+# This is a FIELD TESTER for detecting obvious USB port problems, NOT a compliance
+# certification tool. Limits are calibrated for this specific hardware setup.
+#
+# Hardware characteristics of this tester:
+#   - 0.5mm PCB traces (170mm) = ~1Ω measured resistance
+#   - Standard 2m USB cable = ~1Ω measured resistance
+#   - Total test fixture: ~2Ω series resistance
+#   - Result: ~1V drop at 500mA load
+#
+# Test limits are set to detect GRAVE ERRORS in USB ports:
+#   - Completely dead ports (no VBUS)
+#   - Overcurrent protection tripping
+#   - Excessive voltage sag (worse than test fixture itself)
+#   - Data communication failures
+#
+# These are NOT USB 2.0 spec compliance limits (which would be 4.75V-5.25V, <300mV droop).
+# USB 2.0 spec is included below only to explain why our limits are relaxed.
+#
+# USB 2.0 Spec (reference only - not enforced):
+#   - Voltage under load: 4.75V - 5.25V
+#   - Droop: <300mV for good supply
+#   - Ripple: <100mVpp
+#
+
+IDLE_UNDERVOLT_MV = 4800  # Absolute minimum to consider idle VBUS functional
+
+# Test limits for the tests
+MIN_THR_MBPS = 1.5           # Minimum data throughput
+MIN_MV_LOAD = 4000           # Minimum voltage during the load tests
+MAX_RIPPLE_MVPP = 50         # Typical: 10-20mVpp; flag if >50mVpp
+MIN_MAX_CURRENT_MA = 400     # Must deliver at least 400mA
+# Maximum mean resistance (3Ω = 2Ω fixture + 1Ω margin for dirty contacts)
+MAX_RESISTANCE_MOHM = 3000
 
 # ---------------------- USB IDs & Protocol ----------------------
 VID = 0x1209
@@ -24,14 +49,18 @@ PID = 0x4004
 REQ_GET_PORT = 0x01  # IN:  u8 port
 REQ_SET_PORT = 0x02  # OUT: wValue = port
 REQ_GET_POWER = 0x03  # IN:  power report blob
+REQ_GET_ADC_SAMPLES = 0x04  # Trigger bulk transfer of ADC samples
+REQ_SET_PORT_PASSED = 0x05  # OUT: wValue = port (turns on pass LED)
 REQ_GET_PORTMAP = 0x10  # IN:  bitmask of available ports
 
 TEST_SECS = 3.0
 PKT_SIZE = 1024
-TIMEOUT_MS = 1000
+TIMEOUT_MS = 10000
 
-POWER_REPORT_FMT = "<BBB" + "HH" + "5H"*8 + "HHH"
+ADC_SAMPLES_PER_WINDOW = 9600  # 80 kS/s * 120 ms
+POWER_REPORT_FMT = "<BBB" + "H" + "5H"*7 + "HHH"
 POWER_REPORT_SIZE = struct.calcsize(POWER_REPORT_FMT)
+ADC_SAMPLES_SIZE = ADC_SAMPLES_PER_WINDOW * 2  # 2 bytes per sample
 
 # ---------------------- USB helpers ----------------------
 
@@ -87,6 +116,11 @@ def set_port_and_reopen(dev, intf_num, port):
     dev = find_device()
     intf_num = find_vendor_interface(dev).bInterfaceNumber
     return dev
+
+
+def set_port_passed(dev, intf_num, port):
+    """Turn on the pass LED for the specified port."""
+    ctrl_out(dev, REQ_SET_PORT_PASSED, intf_num, port)
 
 # ---------------------- Bulk loopback ----------------------
 
@@ -194,6 +228,46 @@ def run_bulk_test(dev, duration_s=TEST_SECS, pkt_size=PKT_SIZE):
 # ---------------------- Power parsing ----------------------
 
 
+def get_adc_samples(dev, intf_num, n_steps):
+    """
+    Request and receive ADC samples via bulk transfer.
+
+    Args:
+        dev: USB device
+        intf_num: Interface number
+        n_steps: Number of load steps (idle + n_steps = total captures)
+
+    Returns:
+        List of lists, where each inner list contains ADC samples for one step
+    """
+    # Send control request to trigger bulk transfer
+    ctrl_out(dev, REQ_GET_ADC_SAMPLES, intf_num)
+
+    # Give device time to prepare the data
+    time.sleep(0.1)
+
+    # Find bulk IN endpoint
+    _, ep_in = find_bulk_eps(dev)
+
+    # Total captures = idle + load steps
+    total_captures = n_steps + 1
+    total_size = total_captures * ADC_SAMPLES_SIZE
+
+    # Read all ADC samples from bulk endpoint
+    adc_data = recv_exact(ep_in, total_size, timeout_ms=TIMEOUT_MS)
+
+    # Unpack into separate arrays for each step
+    all_samples = []
+    for i in range(total_captures):
+        start = i * ADC_SAMPLES_SIZE
+        end = start + ADC_SAMPLES_SIZE
+        step_data = adc_data[start:end]
+        samples = struct.unpack(f"<{ADC_SAMPLES_PER_WINDOW}H", step_data)
+        all_samples.append(list(samples))
+
+    return all_samples
+
+
 def parse_power_report(blob):
     if len(blob) != POWER_REPORT_SIZE:
         raise ValueError(
@@ -202,21 +276,19 @@ def parse_power_report(blob):
     port = next(it)
     n_steps = next(it)
     flags = next(it)
-    maxpower = next(it)
     v_idle = next(it)
 
     def take_u16(n): return [next(it) for _ in range(n)]
-    loads = take_u16(5)
+    load_pct = take_u16(5)
     v_mean = take_u16(5)
     v_min = take_u16(5)
-    v_max = take_u16(5)
     droop = take_u16(5)
     ripple = take_u16(5)
     current_mA = take_u16(5)
-    recovery_us = take_u16(5)
+    resistance_mOhm = take_u16(5)
 
     max_current = next(it)
-    ocp_at = next(it)
+    undervolt_at = next(it)
     errors = next(it)
 
     n = n_steps
@@ -224,36 +296,33 @@ def parse_power_report(blob):
         "port": port,
         "n_steps": n,
         "flags": flags,
-        "maxpower_mA": maxpower,
         "v_idle_mV": v_idle,
-        "loads_mA":        loads[:n],
-        "v_mean_mV":       v_mean[:n],
-        "v_min_mV":        v_min[:n],
-        "v_max_mV":        v_max[:n],
-        "droop_mV":        droop[:n],
-        "ripple_mVpp":     ripple[:n],
-        "current_mA":      current_mA[:n],
-        "recovery_us":     recovery_us[:n],
-        "max_current_mA":  max_current,
-        "ocp_at_mA":       ocp_at,
-        "errors":          errors,
+        "load_pct":         load_pct[:n],
+        "v_mean_mV":        v_mean[:n],
+        "v_min_mV":         v_min[:n],
+        "droop_mV":         droop[:n],
+        "ripple_mVpp":      ripple[:n],
+        "current_mA":       current_mA[:n],
+        "resistance_mOhm":  resistance_mOhm[:n],
+        "max_current_mA":   max_current,
+        "undervolt_at_mA":  undervolt_at,
+        "errors":           errors,
     }
 
 # ---------------------- Evaluation ----------------------
 
 
-def evaluate_port(port_result: Dict[str, Any],
-                  limits: Dict[str, float]) -> Tuple[bool, List[str], Dict[str, Any]]:
+def evaluate_port(port_result: Dict[str, Any]) -> Tuple[bool, List[str], Dict[str, Any]]:
     """Return (passed, reasons, rollup_metrics)"""
     reasons: List[str] = []
     passed = True
 
     port = port_result.get("port", -1)
     thr = port_result.get("throughput_Mbps", 0.0)
-    if thr < limits["min_thr_mbps"]:
+    if thr < MIN_THR_MBPS:
         passed = False
         reasons.append(
-            f"throughput {thr:.2f} Mbps < {limits['min_thr_mbps']:.2f} Mbps")
+            f"throughput {thr:.2f} Mbps < {MIN_THR_MBPS:.2f} Mbps")
 
     # --- Skip power checks for control port 0 ---
     if port == 0:
@@ -261,10 +330,8 @@ def evaluate_port(port_result: Dict[str, Any],
             "throughput_Mbps": thr,
             "vidle_mV": 0,
             "vmin_mV": 0,
-            "vmax_mV": 0,
             "max_droop_mV": 0,
             "max_ripple_mVpp": 0,
-            "max_recovery_us": 0,
             "max_measured_current_mA": 0,
         }
         return passed, reasons, rollup
@@ -272,55 +339,71 @@ def evaluate_port(port_result: Dict[str, Any],
     pr = port_result.get("power_report", {}) or {}
     flags = pr.get("flags", 0)
     v_idle = pr.get("v_idle_mV", 0)
-    ocp_at_mA = pr.get("ocp_at_mA", 0)
+    # Actually percentage, not mA
+    undervolt_at_pct = pr.get("undervolt_at_mA", 0)
     vmin_list = pr.get("v_min_mV", [])
-    vmax_list = pr.get("v_max_mV", [])
-    droop_list = pr.get("droop_mV", [])
     ripple_list = pr.get("ripple_mVpp", [])
-    recov_list = pr.get("recovery_us", [])
-    curr_list = pr.get("current_mA", [])
+    max_measured_current = pr.get("max_current_mA")
+    resistance_list = pr.get("resistance_mOhm", [])
 
     # safe reductions
     vmin = min(vmin_list) if vmin_list else 99999
-    vmax = max(vmax_list) if vmax_list else 0
-    max_droop = max(droop_list) if droop_list else 0
     max_ripple = max(ripple_list) if ripple_list else 0
-    max_recovery = max(recov_list) if recov_list else 0
-    max_measured_current = max(curr_list) if curr_list else 0
 
-    # VBUS too low
-    if flags == 1:
-        passed = False
-        reasons.append("VBUS too low to test ({v_idle} mV)")
+    # Calculate resistance statistics
+    valid_resistances = [r for r in resistance_list if r > 0]
+    if valid_resistances:
+        mean_resistance = sum(valid_resistances) / len(valid_resistances)
+        min_resistance = min(valid_resistances)
+        max_resistance = max(valid_resistances)
+        resistance_variation = max_resistance - min_resistance
+    else:
+        mean_resistance = 0
+        min_resistance = 0
+        max_resistance = 0
+        resistance_variation = 0
 
-    if flags == 2:
+    # Check flags
+    if flags & (1 << 0):  # bit 0: vbus_missing
         passed = False
-        reasons.append("VBUS dropped to low at {ocp_at_mA} mA")
+        reasons.append(
+            f"VBUS too low to test at idle ({v_idle} mV < {IDLE_UNDERVOLT_MV} mV)")
 
-    if vmin < limits["v_min_mV"]:
+    if flags & (1 << 1):  # bit 1: undervolt
         passed = False
         reasons.append(
-            f"Vmin {vmin/1000:.2f} V < {limits['v_min_mV']/1000:.2f} V")
-    if vmax > limits["v_max_mV"]:
+            f"VBUS dropped below {MIN_MV_LOAD}mV at {undervolt_at_pct}% load")
+
+    if max_ripple > MAX_RIPPLE_MVPP:
         passed = False
         reasons.append(
-            f"Vmax {vmax/1000:.2f} V > {limits['v_max_mV']/1000:.2f} V")
-    if max_droop > limits["max_droop_mV"]:
-        passed = False
-        reasons.append(f"droop {max_droop} mV > {limits['max_droop_mV']} mV")
-    if max_ripple > limits["max_ripple_mVpp"]:
-        passed = False
-        reasons.append(
-            f"ripple {max_ripple} mVpp > {limits['max_ripple_mVpp']} mVpp")
-    if max_recovery > limits["max_recovery_us"]:
+            f"Voltage ripple {max_ripple}mVpp > {MAX_RIPPLE_MVPP}mVpp (noisy supply)")
+
+    # Check current delivery capability
+    if max_measured_current < MIN_MAX_CURRENT_MA:
         passed = False
         reasons.append(
-            f"recovery {max_recovery} µs > {limits['max_recovery_us']} µs")
-    if max_measured_current < limits["min_max_current_mA"]:
-        passed = False
-        reasons.append(
-            f"measured current never exceeds {limits['min_max_current_mA']} mA (max observed {max_measured_current} mA)"
+            f"Maximum measured current {max_measured_current}mA < {MIN_MAX_CURRENT_MA}mA (insufficient current capability)"
         )
+
+    # Check resistance consistency (resistive vs power supply issue)
+    # Good: Resistance should be consistent across all load steps (~2000mΩ for this fixture)
+    # Bad: Resistance increases with load = weak power supply or current limiting
+    if valid_resistances and len(valid_resistances) >= 3:
+        # Allow up to 500mΩ variation (25% of 2Ω fixture)
+        # This accounts for measurement noise while catching power supply issues
+        if resistance_variation > 500:
+            passed = False
+            reasons.append(
+                f"Resistance varies {resistance_variation}mΩ ({min_resistance}-{max_resistance}mΩ) - indicates power supply issue, not pure resistive drop"
+            )
+
+        # Check for excessively high resistance (dirty contacts, corroded pins, damaged connector)
+        if mean_resistance > MAX_RESISTANCE_MOHM:
+            passed = False
+            reasons.append(
+                f"Mean resistance {mean_resistance:.0f}mΩ > {MAX_RESISTANCE_MOHM}mΩ - indicates dirty/corroded contacts or damaged cable"
+            )
 
     # Optional: echo mismatch still fails
     echo = int(port_result.get("device_port_echo", port))
@@ -332,12 +415,11 @@ def evaluate_port(port_result: Dict[str, Any],
         "throughput_Mbps": thr,
         "vmin_mV": vmin,
         "vidle_mV": v_idle,
-        "vmax_mV": vmax,
-        "max_droop_mV": max_droop,
         "max_ripple_mVpp": max_ripple,
-        "max_recovery_us": max_recovery,
         "max_measured_current_mA": max_measured_current,
-        "ocp_at_mA": int(pr.get("ocp_at_mA") or 0),
+        "undervolt_at_pct": undervolt_at_pct,
+        "mean_resistance_mOhm": mean_resistance,
+        "resistance_variation_mOhm": resistance_variation,
     }
     return passed, reasons, rollup
 
@@ -345,33 +427,6 @@ def evaluate_port(port_result: Dict[str, Any],
 
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="USB loopback & power test for diagnostics pipeline"
-    )
-    ap.add_argument("--min-thr-mbps", type=float, default=DEFAULT_MIN_THR_MBPS)
-    ap.add_argument("--v-min-mv", type=int, default=DEFAULT_V_MIN_MV)
-    ap.add_argument("--v-max-mv", type=int, default=DEFAULT_V_MAX_MV)
-    ap.add_argument("--max-droop-mv", type=int, default=DEFAULT_MAX_DROOP_MV)
-    ap.add_argument("--max-ripple-mvpp", type=int,
-                    default=DEFAULT_MAX_RIPPLE_MVPP)
-    ap.add_argument("--max-recovery-us", type=int,
-                    default=DEFAULT_MAX_RECOVERY_US)
-    ap.add_argument("--secs", type=float, default=TEST_SECS)
-    ap.add_argument("--pkt", type=int, default=PKT_SIZE)
-    ap.add_argument("--json-only", action="store_true",
-                    help="Only print JSON (no human summary)")
-    args = ap.parse_args()
-
-    limits = {
-        "min_thr_mbps": args.min_thr_mbps,
-        "v_min_mV": args.v_min_mv,
-        "v_max_mV": args.v_max_mv,
-        "max_droop_mV": args.max_droop_mv,
-        "max_ripple_mVpp": args.max_ripple_mvpp,
-        "max_recovery_us": args.max_recovery_us,
-        "min_max_current_mA": DEFAULT_MIN_MAX_CURRENT_MA,
-    }
-
     overall_pass = True
     summary_obj: Dict[str, Any] = {"tested_ports": [], "per_port": []}
 
@@ -381,20 +436,18 @@ def main():
         ports = get_ports_to_test(dev)
     except Exception as e:
         # Hard fail: no device / enumeration error
-        if not args.json_only:
-            print(f"USB TEST: No tester detected!!!")
+        print(f"USB TEST: No tester detected!!!")
         sys.exit(0)
 
     if not ports:
-        if not args.json_only:
-            print("USB TEST: FAIL — no ports detected")
+        print("USB TEST: FAIL — no ports detected")
         print(json.dumps({"error": "no ports detected"}))
         sys.exit(1)
 
     for p in ports:
         dev = set_port_and_reopen(dev, intf_num, p)
 
-        res = run_bulk_test(dev, duration_s=args.secs, pkt_size=args.pkt)
+        res = run_bulk_test(dev, duration_s=TEST_SECS, pkt_size=PKT_SIZE)
         res["port"] = p
         try:
             port_echo = ctrl_in(dev, REQ_GET_PORT, 1, intf_num)[0]
@@ -402,44 +455,66 @@ def main():
         except Exception:
             res["device_port_echo"] = -1
 
-        # Power report
-        try:
-            data = ctrl_in(dev, REQ_GET_POWER, POWER_REPORT_SIZE, intf_num)
-            res["power_report"] = parse_power_report(bytes(data))
-        except Exception as e:
-            res["power_report_error"] = str(e)
-            res["power_report"] = {
-                "v_min_mV": [], "v_max_mV": [], "droop_mV": [], "ripple_mVpp": [], "recovery_us": []
-            }
+        # Power report (skip for port 0 - control port with no power measurement)
+        if p != 0:
+            try:
+                data = ctrl_in(dev, REQ_GET_POWER, POWER_REPORT_SIZE, intf_num)
+                res["power_report"] = parse_power_report(bytes(data))
 
-        passed, reasons, rollup = evaluate_port(res, limits)
+                # Get ADC samples via bulk transfer (idle + all load steps)
+                # try:
+                #     n_steps = res["power_report"].get("n_steps", 5)
+                #     adc_samples = get_adc_samples(dev, intf_num, n_steps)
+                #     res["power_report"]["adc_samples_idle"] = adc_samples[0]
+                #     res["power_report"]["adc_samples_steps"] = adc_samples[1:]
+                # except Exception as e:
+                #     res["adc_samples_error"] = str(e)
+
+            except Exception as e:
+                res["power_report_error"] = str(e)
+                res["power_report"] = {
+                    "v_min_mV": [], "v_max_mV": [], "droop_mV": [], "ripple_mVpp": [], "recovery_us": []
+                }
+
+        passed, reasons, rollup = evaluate_port(res)
         res["pass"] = passed
         res["fail_reasons"] = reasons
         res["rollup"] = rollup
 
+        # Turn on pass LED if port passed
+        if passed:
+            try:
+                set_port_passed(dev, intf_num, p)
+            except Exception as e:
+                # Don't fail the test if LED control fails
+                print(f"  Warning: Failed to set pass LED for port {p}: {e}")
+
         summary_obj["tested_ports"].append(p)
         summary_obj["per_port"].append(res)
 
-        if not args.json_only:
-            # concise single-line summary
-            vidle_v = rollup["vidle_mV"] / 1000
-            vmin_v = rollup["vmin_mV"] / \
-                1000 if rollup["vmin_mV"] != 99999 else 0.0
-            droop = rollup["max_droop_mV"]
-            ripple = rollup["max_ripple_mVpp"]
-            thr = rollup["throughput_Mbps"]
-            imax = rollup["max_measured_current_mA"]
+        # concise single-line summary
+        vidle_v = rollup["vidle_mV"] / 1000
+        vmin_v = rollup["vmin_mV"] / \
+            1000 if rollup["vmin_mV"] != 99999 else 0.0
+        ripple = rollup["max_ripple_mVpp"]
+        thr = rollup["throughput_Mbps"]
+        imax = rollup["max_measured_current_mA"]
+        mean_r = rollup.get("mean_resistance_mOhm", 0)
+        r_var = rollup.get("resistance_variation_mOhm", 0)
 
-            status = "PASS" if passed else "FAIL"
-            if p == 0:
-                print(f"USB Port {p}: {thr:.2f} Mbps — {status}")
-            else:
-                print(f"USB Port {p}: {thr:.2f} Mbps, Idle {vidle_v} V, "
-                      f"Vmin {vmin_v:.2f} V, droop {droop} mV, ripple {ripple} mVpp, "
-                      f"Imax {imax} mA — {status}")
+        status = "PASS" if passed else "FAIL"
+        if p == 0:
+            print(f"USB Port {p} — {status}: {thr:.2f} Mbps")
+        else:
+            print(f"USB Port {p} — {status}: {thr:.2f} Mbps, Idle {vidle_v:.2f}V, "
+                  f"Vmin {vmin_v:.2f}V, ripple {ripple}mVpp, "
+                  f"Imax {imax}mA, R {mean_r:.0f}±{r_var:.0f}mΩ")
 
         if not passed:
             overall_pass = False
+            # Print failure reasons on separate lines
+            for reason in reasons:
+                print(f"  -> {reason}")
 
         time.sleep(0.05)
 
@@ -451,7 +526,7 @@ def main():
 
     # Save report to file
     try:
-        with open("/root/usb_report.json", "w") as f:
+        with open("./usb_report.json", "w") as f:
             json.dump(summary_obj, f, indent=2)
     except Exception:
         pass
