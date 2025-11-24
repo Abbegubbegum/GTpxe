@@ -163,8 +163,8 @@ fi
 
 
 print_green "Running GPS Test..."
-# Check if USB device exists
-if [ -e /dev/ttyACM0 ]; then
+# Check if product name is "DT10", i.e a DatorBBGPS
+if [ -f /sys/class/dmi/id/product_name ] && grep -q "DT10" /sys/class/dmi/id/product_name; then
     # Start gpsd daemon
     if gpsd /dev/ttyACM0 -n -F /var/run/gpsd.sock; then
         sleep 2
@@ -180,8 +180,6 @@ if [ -e /dev/ttyACM0 ]; then
     else
         print_red "Failed to start gpsd - skipping GPS test."
     fi
-else
-    print_red "GPS device not found at /dev/ttyACM0 - skipping GPS test."
 fi
 
 #Kill the watcher before starting the interactive tests
@@ -196,8 +194,8 @@ print_green "Running speaker test..."
 # Check if there are any sound cards available
 if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
     # Set volume on soundcard
-    amixer -c 0 sset Master 100% unmute >/dev/null || true
-    amixer -c 0 sset PCM 100% unmute >/dev/null || true
+    amixer -c 0 sset Master 100% unmute >/dev/null 2>&1 || true
+    amixer -c 0 sset PCM 100% unmute >/dev/null 2>&1 || true
     
     # Basic tone
     speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1

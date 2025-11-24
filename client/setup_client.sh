@@ -36,6 +36,9 @@ lbu add /etc/local.d/
 echo "Enabling local startup service..."
 rc-update add local default
 
+echo "Disabling savecache service (not needed for diskless boot)..."
+rc-update del savecache shutdown
+
 echo "Making binaries and script files executable..."
 # Make the scripts executable
 chmod +x /home/ssh/binaries/*
@@ -44,14 +47,14 @@ chmod +x /home/ssh/scripts/*
 mv /home/ssh/scripts/restart_test.sh /root
 lbu add /root
 
-echo "Disabling old APK repositories..."
-sed -i 's|^|#|' /etc/apk/repositories
+echo "Disabling online APK repositories..."
+sed -i 's|^http://dl|#|' /etc/apk/repositories
 
 echo "Adding our own local reposity..."
 echo 'file:///var/custom-repo/main' >> /etc/apk/repositories
 
-echo "Removing 'gateway' entries from /etc/network/interfaces..."
-sed -i '/^\s*gateway\s\+/d' /etc/network/interfaces
+echo "Changing eth0 to use DHCP instead of static IP..."
+sed -i '/^iface eth0 inet static/,/^\s*$/c\iface eth0 inet dhcp' /etc/network/interfaces
 
 echo "Creating overlay backup package..."
 lbu pkg /home/ssh

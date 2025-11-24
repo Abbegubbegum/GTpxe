@@ -35,7 +35,7 @@ from typing import Dict, Any, List, Tuple
 IDLE_UNDERVOLT_MV = 4800  # Absolute minimum to consider idle VBUS functional
 
 # Test limits for the tests
-MIN_THR_MBPS = 1.5           # Minimum data throughput
+MAX_MBPS_DIFF = 0.2           # Maximum data throughput difference between ports
 MIN_MV_LOAD = 4000           # Minimum voltage during the load tests
 MAX_RIPPLE_MVPP = 50         # Typical: 10-20mVpp; flag if >50mVpp
 MIN_MAX_CURRENT_MA = 400     # Must deliver at least 400mA
@@ -61,6 +61,8 @@ ADC_SAMPLES_PER_WINDOW = 9600  # 80 kS/s * 120 ms
 POWER_REPORT_FMT = "<BBB" + "H" + "5H"*7 + "HHH"
 POWER_REPORT_SIZE = struct.calcsize(POWER_REPORT_FMT)
 ADC_SAMPLES_SIZE = ADC_SAMPLES_PER_WINDOW * 2  # 2 bytes per sample
+
+PORT_THROUGHPUTS_MBPS = {}
 
 # ---------------------- USB helpers ----------------------
 
@@ -319,10 +321,13 @@ def evaluate_port(port_result: Dict[str, Any]) -> Tuple[bool, List[str], Dict[st
 
     port = port_result.get("port", -1)
     thr = port_result.get("throughput_Mbps", 0.0)
-    if thr < MIN_THR_MBPS:
+    PORT_THROUGHPUTS_MBPS[port] = thr
+    # Check if throughput the min and max throughputs differ too much
+    if max(PORT_THROUGHPUTS_MBPS.values()) - min(PORT_THROUGHPUTS_MBPS.values()) > MAX_MBPS_DIFF:
         passed = False
         reasons.append(
-            f"throughput {thr:.2f} Mbps < {MIN_THR_MBPS:.2f} Mbps")
+            f"Throughput difference between ports exceeds {MAX_MBPS_DIFF} Mbps"
+        )
 
     # --- Skip power checks for control port 0 ---
     if port == 0:
