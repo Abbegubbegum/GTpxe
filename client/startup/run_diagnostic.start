@@ -185,12 +185,6 @@ fi
 #Kill the watcher before starting the interactive tests
 cleanup_abort_watcher
 
-run_keyboard_test
-
-run_screen_test
-
-print_green "Running speaker test..."
-
 # Check if there are any sound cards available
 if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
     # Set volume on soundcard
@@ -199,13 +193,19 @@ if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
     
     # Basic tone
     speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1
-    
-    # Simple talking
-    aplay /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1
-    
-    print_green "Speaker test completed."
 else
     print_red "No sound cards found - skipping speaker test."
+fi
+
+run_keyboard_test
+
+run_screen_test
+
+# Play the beep at the start to indicate the end of tests
+# But play this at the end so we know the user will hear it
+if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
+    # Simple talking
+    aplay /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1
 fi
 
 print_green "All tests completed. GTUA"
