@@ -53,8 +53,8 @@ sed -i 's|^http://dl|#|' /etc/apk/repositories
 echo "Adding our own local reposity..."
 echo 'file:///var/custom-repo/main' >> /etc/apk/repositories
 
-echo "Changing eth0 to use DHCP instead of static IP..."
-sed -i '/^iface eth0 inet static/,/^\s*$/c\iface eth0 inet dhcp' /etc/network/interfaces
+echo "Removing static interface configuration..."
+sed -i '/^iface eth0/,$d' /etc/network/interfaces
 
 echo "Creating overlay backup package..."
 lbu pkg /home/ssh

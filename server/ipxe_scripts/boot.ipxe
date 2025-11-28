@@ -17,8 +17,7 @@ echo DEBUG: Architecture chosen: ${arch}
 
 # ---------- Where your stuff lives ----------
 # Change these to your actual hosts/paths
-echo DEBUG: Setting up server variables...
-set server_ip          192.168.200.1
+set server_ip          192.168.150.62
 set server             http://${server_ip}
 set alpine_repo        ${server}/alpine/apks
 set alpine_boot        ${server}/alpine/boot/${arch}
@@ -27,24 +26,19 @@ set initramfs          ${alpine_boot}/initramfs-lts
 set initramfsfilename  initramfs-lts
 set modloop            ${alpine_boot}/modloop-lts
 set apkovl             ${alpine_boot}/localhost.apkovl.tar.gz
-set ipconfig           ip=dhcp
+set ipconfig           ip=dhcp BOOTIF=01-${mac:hexhyp}
 # If you want the pxe client to have a static IP
 # set ipconfig         ip=192.168.150.105:::255.255.255.0:
-echo DEBUG: Server variables set. alpine_boot=${alpine_boot}
 
 
 # Ask controller which default to use (memtest or alpine)
 # It will also tell us which memtest flavor to jump to on this platform.
 # Fallback default = alpine if controller is down.
-echo DEBUG: Setting boot targets...
 set def_target alpine
-echo DEBUG: def_target set to alpine
 set memtest_label memtest-bios
-echo DEBUG: memtest_label set to memtest-bios
 iseq ${fw} uefi && set memtest_label memtest-uefi ||
 echo DEBUG: Boot targets set. def_target=${def_target}, memtest_label=${memtest_label}
 
-echo DEBUG: About to contact server at ${server}/bootstage?mac=${net0/mac}
 chain --autofree ${server}/bootstage?mac=${net0/mac} || goto failed_bootstage
 echo DEBUG: Successfully contacted server, def_target=${def_target}
 goto menu
