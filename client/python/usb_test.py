@@ -531,7 +531,7 @@ def main():
 
     # Save report to file
     try:
-        with open("./usb_report.json", "w") as f:
+        with open("/root/usb_report.json", "w") as f:
             json.dump(summary_obj, f, indent=2)
     except Exception:
         pass

@@ -125,7 +125,7 @@ else
 fi
 
 print_green "Running Disk Selftest..."
-if ! python /home/ssh/python/disk_health.py
+if ! python -u /home/ssh/python/disk_health.py
 then
     print_red "Disk check failed."
     exit_program
@@ -134,7 +134,7 @@ else
 fi
 
 print_green "Running USB test..."
-if ! python /home/ssh/python/usb_test.py
+if ! python -u /home/ssh/python/usb_test.py
 then
     print_red "USB test failed."
     exit_program
@@ -161,6 +161,20 @@ else
     print_green "Serial test completed successfully."
 fi
 
+#Kill the watcher before starting the interactive tests
+cleanup_abort_watcher
+
+# Check if there are any sound cards available
+if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
+    # Set volume on soundcard
+    amixer -c 0 sset Master 100% unmute >/dev/null 2>&1 || true
+    amixer -c 0 sset PCM 100% unmute >/dev/null 2>&1 || true
+    
+    # Basic tone
+    speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1
+else
+    print_red "No sound cards found - skipping speaker test."
+fi
 
 print_green "Running GPS Test..."
 # Check if product name is "DT10", i.e a DatorBBGPS
@@ -180,21 +194,6 @@ if [ -f /sys/class/dmi/id/product_name ] && grep -q "DT10" /sys/class/dmi/id/pro
     else
         print_red "Failed to start gpsd - skipping GPS test."
     fi
-fi
-
-#Kill the watcher before starting the interactive tests
-cleanup_abort_watcher
-
-# Check if there are any sound cards available
-if [ -d /proc/asound ] && [ -n "$(ls -A /proc/asound/card* 2>/dev/null)" ]; then
-    # Set volume on soundcard
-    amixer -c 0 sset Master 100% unmute >/dev/null 2>&1 || true
-    amixer -c 0 sset PCM 100% unmute >/dev/null 2>&1 || true
-    
-    # Basic tone
-    speaker-test -t sine -f 880 -l 1 >/dev/null 2>&1
-else
-    print_red "No sound cards found - skipping speaker test."
 fi
 
 run_keyboard_test

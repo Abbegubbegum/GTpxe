@@ -20,9 +20,22 @@ from typing import Tuple, Dict, Optional, List
 
 # --------------------------- helpers ---------------------------
 
+# ANSI color codes
+
+
+class Colors:
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    GREEN = '\033[0;32m'
+    YELLOW = '\033[0;33m'
+    RED = '\033[0;31m'
+    CYAN = '\033[0;36m'
+    GRAY = '\033[0;90m'
+    DIM = '\033[2m'  # Dimmed text (more visible than gray)
+
 
 def print_line():
-    print("-" * 80)
+    print(Colors.GRAY + "-" * 80 + Colors.RESET)
 
 
 def run_cmd(cmd: List[str], input_text: Optional[bytes] = None, timeout: Optional[int] = None) -> Tuple[int, str, str]:
@@ -139,12 +152,42 @@ def smart_severity(smart_o_text: str) -> Tuple[str, str, Dict[str, int]]:
     offunc = get_attr(attrs, r"^(198|Offline_Uncorrectable)$")
     crc = get_attr(attrs, r"^(199|UDMA_CRC_Error_Count)$")
 
-    if any(x > 0 for x in (ralloc, repunc, pend, offunc)):
+    # Thresholds (balanced for practical use - filter out noise, catch real problems)
+    RALLOC_FAIL = 50    # 50+ reallocated sectors indicates drive degradation
+    RALLOC_WARN = 10    # 10+ reallocated sectors warrants monitoring
+    CRC_FAIL = 100      # 100+ CRC errors indicates serious cable/controller issue
+    CRC_WARN = 10       # 10+ CRC errors means cable should be checked
+
+    # Critical current errors - these are active problems (should always be 0)
+    if pend > 0 or offunc > 0:
         sev = "FAIL"
-        why_parts.append("media-errors")
-    if crc > 0 and sev == "PASS":
+        if pend > 0:
+            why_parts.append(f"pending_sectors={pend}")
+        if offunc > 0:
+            why_parts.append(f"offline_uncorrectable={offunc}")
+
+    # Reported uncorrectable - warn if present, but not immediate fail
+    # (these are historical, not active bad sectors)
+    if repunc > 0 and sev == "PASS":
         sev = "WARN"
-        why_parts.append("crc-link-errors")
+        why_parts.append(f"reported_uncorrect={repunc}")
+
+    # Reallocated sectors - graduated response
+    if ralloc >= RALLOC_FAIL:
+        sev = "FAIL"
+        why_parts.append(f"reallocated_sectors={ralloc}(≥{RALLOC_FAIL})")
+    elif ralloc >= RALLOC_WARN and sev == "PASS":
+        sev = "WARN"
+        why_parts.append(f"reallocated_sectors={ralloc}(≥{RALLOC_WARN})")
+
+    # CRC errors - cable/connection issue (not drive failure)
+    if crc >= CRC_FAIL:
+        if sev == "PASS":
+            sev = "FAIL"
+        why_parts.append(f"crc_errors={crc}(≥{CRC_FAIL},CHECK_CABLE)")
+    elif crc >= CRC_WARN and sev == "PASS":
+        sev = "WARN"
+        why_parts.append(f"crc_errors={crc}(≥{CRC_WARN},CHECK_CABLE)")
 
     extras = {
         "ralloc": ralloc,
@@ -285,31 +328,22 @@ def lsblk_one(dev: str, field: str) -> str:
 def main() -> int:
     print()
     print_line()
-    print("Disk inventory:")
+    print(f"{Colors.BOLD}{Colors.CYAN}Disk Inventory:{Colors.RESET}")
     inv = lsblk_filtered()
     if inv:
         print(inv)
     print_line()
 
-    print("Recent kernel disk messages:")
-    rc, out, _ = run_cmd(["dmesg"])
-    if rc == 0:
-        # match sdX or nvmeN
-        lines = [ln for ln in out.splitlines() if re.search(
-            r"\bsd[a-z]\b|\bnvme\d", ln)]
-        print("\n".join(lines[-20:]))
-    print_line()
-
     disks = list_disks()
     if not disks:
-        print("No disks detected.")
+        print(f"{Colors.YELLOW}No disks detected.{Colors.RESET}")
         return 0
 
     overall_rc = 0
 
     for n in disks:
         dev = f"/dev/{n}"
-        print(f"Device: {dev}")
+        print(f"\n{Colors.BOLD}{Colors.CYAN}Device: {dev}{Colors.RESET}")
         model = lsblk_one(dev, "MODEL")
         serial = lsblk_one(dev, "SERIAL")
         size = lsblk_one(dev, "SIZE")
@@ -337,51 +371,84 @@ def main() -> int:
                 pu = kv.get("percentage_used", 0)
                 poh = kv.get("power_on_hours", 0)
 
+                # NVMe health thresholds
                 sev = "PASS"
                 why = []
+
+                # Critical warning - always fail (indicates hardware problem)
                 if cw != 0:
                     sev = "FAIL"
                     why.append("critical_warning")
+
+                # Media errors - always fail (indicates bad NAND cells)
                 if me > 0 and sev == "PASS":
                     sev = "FAIL"
                     why.append("media_errors")
+
+                # Wear level thresholds
                 if pu >= 100 and sev == "PASS":
                     sev = "FAIL"
                     why.append("worn_out")
-                if pu >= 80 and sev == "PASS":
+                elif pu >= 90 and sev == "PASS":
                     sev = "WARN"
-                    why.append("high_wear")
-                if ne > 0 and sev == "PASS":
-                    sev = "WARN"
-                    why.append("controller_errors")
+                    why.append("high_wear(≥90%)")
 
-                print(f"  Health: {sev}")
+                # Error log entries - only warn if significant
+                if ne >= 10 and sev == "PASS":
+                    sev = "WARN"
+                    why.append(f"controller_errors(≥10)")
+
+                # Colorize health status
+                if sev == "PASS":
+                    health_str = f"{Colors.GREEN}{Colors.BOLD}PASS{Colors.RESET}"
+                elif sev == "WARN":
+                    health_str = f"{Colors.YELLOW}{Colors.BOLD}WARN{Colors.RESET}"
+                else:
+                    health_str = f"{Colors.RED}{Colors.BOLD}FAIL{Colors.RESET}"
+
+                print(f"  Health: {health_str}")
                 if sev == "FAIL":
                     overall_rc = 1
-                print(f"    reasons: {(' '.join(why)) or 'ok'}")
                 print(
                     f"    Power-on hours: {poh or 0}  (~{years_from_hours(poh):.2f} years)")
-                print(f"    critical_warning: {cw or 0}")
-                print(f"    media_errors:     {me or 0}")
-                print(f"    err_log_entries:  {ne or 0}")
-                print(f"    percentage_used:  {pu or 0}")
+                print(f"    Wear level: {pu or 0}%")
+
+                # Only show concerning attributes
+                nvme_concerns = []
+                if cw != 0:
+                    nvme_concerns.append(f"Critical_Warning={cw} (FAIL if >0)")
+                if me > 0:
+                    nvme_concerns.append(f"Media_Errors={me} (FAIL if >0)")
+                if pu >= 90:
+                    nvme_concerns.append(
+                        f"Percentage_Used={pu}% (WARN≥90%, FAIL≥100%)")
+                if ne >= 10:
+                    nvme_concerns.append(f"Error_Log_Entries={ne} (WARN≥10)")
+
+                if nvme_concerns:
+                    print(
+                        f"    {Colors.YELLOW}{Colors.BOLD}CONCERNS:{Colors.RESET}")
+                    for concern in nvme_concerns:
+                        print(
+                            f"      {Colors.YELLOW}•{Colors.RESET} {concern}")
 
                 # Self-test log (optional)
                 rcS, stlog, _ = run_cmd(["nvme", "self-test-log", ctrl])
                 if rcS == 0 and stlog.strip():
-                    print("    Self-test result (most recent):")
-                    for l in nvme_decode_selftest_result_block(stlog):
-                        print(l)
-                else:
-                    # If we failed to fetch, just note that we started the test
-                    print(
-                        "    Self-test: started (short). Recheck later with: nvme self-test-log", ctrl)
+                    decoded = nvme_decode_selftest_result_block(stlog)
+                    # Only show if there's useful info
+                    if decoded and not all("No test recorded" in line for line in decoded):
+                        print(
+                            f"    {Colors.CYAN}Self-test result (most recent):{Colors.RESET}")
+                        for l in decoded:
+                            print(f"    {l}")
             else:
-                print("  Health: ERROR")
+                print(
+                    f"  Health: {Colors.RED}{Colors.BOLD}ERROR{Colors.RESET}")
                 overall_rc = 1
                 if nvme_e.strip():
                     print(
-                        "    " + indent("\n".join(nvme_e.splitlines()[:6]), 4))
+                        f"    {Colors.RED}" + indent("\n".join(nvme_e.splitlines()[:6]), 4) + Colors.RESET)
 
         else:
             # SATA/USB/SAS via smartctl
@@ -417,90 +484,82 @@ def main() -> int:
 
                 sev, why, extras = smart_severity(smart_o)
 
-                # ATA error count
+                # ATA error count - only warn if significant
                 m = re.search(r"ATA Error Count\s*:\s*(\d+)", smart_o, re.I)
                 ata_err = to_int(m.group(1), 0) if m else 0
-                if ata_err > 0 and sev == "PASS":
+                if ata_err >= 5 and sev == "PASS":
                     sev = "WARN"
-                    why = (why + " " if why else "") + "ata_error_log"
+                    why = (why + " " if why else "") + f"ata_error_log(≥5)"
 
-                print(f"  Health: {sev}")
+                # Colorize health status
+                if sev == "PASS":
+                    health_str = f"{Colors.GREEN}{Colors.BOLD}PASS{Colors.RESET}"
+                elif sev == "WARN":
+                    health_str = f"{Colors.YELLOW}{Colors.BOLD}WARN{Colors.RESET}"
+                else:
+                    health_str = f"{Colors.RED}{Colors.BOLD}FAIL{Colors.RESET}"
+
+                print(f"  Health: {health_str}")
                 if sev == "FAIL":
                     overall_rc = 1
-                print(f"    reasons: {why or 'ok'}")
-                print(
-                    f"    ralloc={extras['ralloc']} repunc={extras['repunc']} pend={extras['pend']} offunc={extras['offunc']} crc={extras['crc']}")
                 print(
                     f"    Power-on hours: {poh or 0}  (~{years_from_hours(poh):.2f} years)")
-                print(f"    ata_error_log: {ata_err}")
 
-                if ata_err > 0:
+                # Only show concerning attributes
+                concerns = []
+                if extras['repunc'] > 0:
+                    concerns.append(
+                        f"Reported_Uncorrect={extras['repunc']} (WARN if >0)")
+                if extras['pend'] > 0:
+                    concerns.append(
+                        f"Pending_Sectors={extras['pend']} (FAIL if >0)")
+                if extras['offunc'] > 0:
+                    concerns.append(
+                        f"Offline_Uncorrectable={extras['offunc']} (FAIL if >0)")
+                if extras['ralloc'] >= 10:
+                    concerns.append(
+                        f"Reallocated_Sectors={extras['ralloc']} (WARN≥10, FAIL≥50)")
+                if extras['crc'] >= 10:
+                    concerns.append(
+                        f"CRC_Errors={extras['crc']} (WARN≥10, FAIL≥100) {Colors.YELLOW}- CHECK CABLE{Colors.RESET}")
+
+                if concerns:
+                    print(
+                        f"    {Colors.YELLOW}{Colors.BOLD}CONCERNS:{Colors.RESET}")
+                    for concern in concerns:
+                        print(
+                            f"      {Colors.YELLOW}•{Colors.RESET} {concern}")
+
+                if ata_err >= 5:
+                    print(
+                        f"    {Colors.YELLOW}ATA Error Log: {ata_err} errors found (WARN≥5){Colors.RESET}")
                     # Show recent errors (first ~20 lines that match key markers)
-                    print("    Recent ATA errors (drive shows last 5):")
+                    print(f"    {Colors.RED}Recent ATA errors:{Colors.RESET}")
                     shown = 0
                     for ln in smart_o.splitlines():
                         if re.match(r"^(Error \d+ occurred|Error: )", ln):
-                            print("      " + ln)
+                            print(f"      {ln}")
                             shown += 1
                             if shown >= 20:
                                 break
 
-                print("    Self-test results:")
-                for ln in smart_o.splitlines():
-                    if re.search(r"Self-test execution status|#\s*1\s+", ln):
-                        print("      " + ln)
-
-                print("    Key SMART attributes:")
-                # Print key attributes like original script
-                wanted_ids = {"5", "187", "196", "197", "198", "199"}
-                wanted_names = {
-                    "Reallocated_Sector_Ct",
-                    "Reported_Uncorrect",
-                    "Uncorrect",
-                    "Current_Pending_Sector",
-                    "Offline_Uncorrectable",
-                    "UDMA_CRC_Error_Count"
-                }
-
-                printed = set()
-                # Prefer names
-                for name in list(attrs.keys()):
-                    if name.isdigit():  # skip numeric mirror keys in this loop
-                        continue
-                    name_ok = (name in wanted_names)
-                    id_ok = False
-                    # find the matching ID mirror if any
-                    # (We stored both name and id with same value, but we don't have mapping name->id here;
-                    #  instead, use heuristic: if numeric key exists and equals this value, and numeric in wanted_ids.)
-                    # Simpler: also emit by numeric id:
-                for id_ in wanted_ids:
-                    val = attrs.get(id_, None)
-                    if val is not None and ("ID"+id_) not in printed:
-                        # Try to find the usual smartctl name for cosmetic print
-                        label = {
-                            "5": "Reallocated_Sector_Ct",
-                            "187": "Reported_Uncorrect",
-                            "196": "Reallocated_Event_Count",
-                            "197": "Current_Pending_Sector",
-                            "198": "Offline_Uncorrectable",
-                            "199": "UDMA_CRC_Error_Count",
-                        }.get(id_, f"ID_{id_}")
-                        print(f"      {label:<26}={val}")
-                        printed.add("ID"+id_)
-
-                # Additionally, if names exist directly, print them (avoid duplicates)
-                for nm in sorted(wanted_names):
-                    if nm in attrs and ("NM"+nm) not in printed:
-                        print(f"      {nm:<26}={attrs[nm]}")
-                        printed.add("NM"+nm)
+                # Show self-test results only if there's something interesting
+                selftest_lines = [ln for ln in smart_o.splitlines()
+                                  if re.search(r"Self-test execution status|#\s*1\s+", ln)]
+                if selftest_lines and not all("Completed without error" in ln or "of test" in ln for ln in selftest_lines):
+                    print(f"    {Colors.CYAN}Self-test results:{Colors.RESET}")
+                    for ln in selftest_lines[:3]:  # Only show first 3 lines
+                        print(f"      {ln}")
 
             else:
-                print("  Health: ERROR")
+                print(
+                    f"  Health: {Colors.RED}{Colors.BOLD}ERROR{Colors.RESET}")
                 overall_rc = 1
                 err_head = "\n".join(smart_e.splitlines()[
                                      :8]) if smart_e else ""
                 if err_head:
-                    print("    " + indent(err_head, 4))
+                    print(f"    {Colors.RED}" +
+                          indent(err_head, 4) + Colors.RESET)
 
         print_line()
 
