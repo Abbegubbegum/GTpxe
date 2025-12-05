@@ -60,12 +60,27 @@ run_in_vt() {
 }
 
 # This function is used to run the keyboard test in a separate VT.
-run_keyboard_test() {
-    run_in_vt /home/ssh/binaries/keyboard_test
+run_input_device_test() {
+    run_in_vt /home/ssh/binaries/input_device_test
 }
 
 run_screen_test() {
     run_in_vt /home/ssh/binaries/screen_test
+}
+
+ask_continue() {
+    printf '\033[0;33m%s\033[0m' "Do you want to continue with the remaining tests? (y/N): "
+    read -r answer < /dev/tty1
+    case "$answer" in
+        [Yy]*)
+            print_green "Continuing tests..."
+            return 0
+        ;;
+        *)
+            print_red "Exiting tests."
+            return 1
+        ;;
+    esac
 }
 
 exit_program() {
@@ -109,7 +124,9 @@ print_green "Starting Memory/CPU Test with stress-ng"
 if ! stress-ng --cpu "$CORE_COUNT" --vm "$CORE_COUNT" --vm-bytes 75% --timeout 30s --metrics-brief
 then
     print_red "Memory/CPU Test failed."
-    exit_program
+    if ! ask_continue; then
+        exit_program
+    fi
 else
     print_green "Memory/CPU Test completed successfully."
 fi
@@ -119,7 +136,9 @@ print_green "Running Memtest for memory testing..."
 if ! memtester 100M 1
 then
     print_red "Memtest failed."
-    exit_program
+    if ! ask_continue; then
+        exit_program
+    fi
 else
     print_green "Memtest completed successfully."
 fi
@@ -128,7 +147,9 @@ print_green "Running Disk Selftest..."
 if ! python -u /home/ssh/python/disk_health.py
 then
     print_red "Disk check failed."
-    exit_program
+    if ! ask_continue; then
+        exit_program
+    fi
 else
     print_green "Disk selftest completed successfully"
 fi
@@ -137,17 +158,15 @@ print_green "Running USB test..."
 if ! python -u /home/ssh/python/usb_test.py
 then
     print_red "USB test failed."
-    exit_program
+    if ! ask_continue; then
+        exit_program
+    fi
 else
     print_green "USB test completed successfully"
 fi
 
 print_green "ACPI Status:"
 acpi -V
-
-for fan in /sys/class/hwmon/hwmon*/fan*_input; do
-    [ -f "$fan" ] && echo "$(basename "$fan"): $(cat "$fan") RPM"
-done
 
 print_green "Test Serial Ports..."
 
@@ -156,7 +175,6 @@ then
     print_red "Serial test possible failure."
     # Don't exit here because there are serial port chips that are not connected to anything.
     # It fails but its expected.
-    #exit 1
 else
     print_green "Serial test completed successfully."
 fi
@@ -177,10 +195,31 @@ else
 fi
 
 print_green "Running GPS Test..."
-# Check if product name is "DT10", i.e a DatorBBGPS
-if [ -f /sys/class/dmi/id/product_name ] && grep -q "DT10" /sys/class/dmi/id/product_name; then
+
+# Function to check if a device outputs NMEA sentences (GPS data)
+is_gps_device() {
+    device=$1
+    # Read from device for 2 seconds and check for NMEA sentences
+    # NMEA sentences start with $ and contain common GPS headers like GPGGA, GPRMC, etc.
+    timeout 2 cat "$device" 2>/dev/null | grep -q '^\$G[NP]' && return 0
+    return 1
+}
+
+# Look for GPS on ttyACM devices
+gps_device=""
+for tty in /dev/ttyACM*; do
+    [ -e "$tty" ] || continue
+    if is_gps_device "$tty"; then
+        gps_device="$tty"
+        break
+    fi
+done
+
+# If GPS found, run the test
+if [ -n "$gps_device" ]; then
+    print_green "Found GPS at $gps_device"
     # Start gpsd daemon
-    if gpsd /dev/ttyACM0 -n -F /var/run/gpsd.sock; then
+    if gpsd "$gps_device" -n -F /var/run/gpsd.sock; then
         sleep 2
         # Verify gpsd is actually receiving GPS data
         if gpspipe -w -n 5 2>/dev/null | grep -q "TPV\|SKY"; then
@@ -194,9 +233,11 @@ if [ -f /sys/class/dmi/id/product_name ] && grep -q "DT10" /sys/class/dmi/id/pro
     else
         print_red "Failed to start gpsd - skipping GPS test."
     fi
+else
+    print_red "No GPS device found - skipping GPS test."
 fi
 
-run_keyboard_test
+run_input_device_test
 
 run_screen_test
 

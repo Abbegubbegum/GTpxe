@@ -1,0 +1,282 @@
+================================================================================
+         ALPINE PXE DIAGNOSTIC TOOL - TECHNICIAN REFERENCE GUIDE
+================================================================================
+
+This system is a diskless Alpine Linux environment running entirely in RAM.
+All diagnostic tools and scripts are pre-installed and ready to use.
+
+================================================================================
+                           SYSTEM OVERVIEW
+================================================================================
+
+- Operating System: Alpine Linux (diskless mode, loaded via PXE)
+- Root Password: None (direct root login)
+- User Account: ssh (for development/file transfer purposes)
+- Network: DHCP configured automatically on boot
+- Storage: Everything runs in RAM - changes are lost on reboot
+
+================================================================================
+                        AUTOMATED DIAGNOSTIC SEQUENCE
+================================================================================
+
+The diagnostic tests run automatically on boot via:
+    /etc/local.d/run_diagnostic.start
+
+Test sequence (in order):
+    1. Memory/CPU stress test (30 seconds, 75% RAM utilization)
+    2. RAM integrity test (memtester, 100MB single pass)
+    3. Disk health check (NVMe/SATA SMART diagnostics)
+    4. USB port testing (requires custom test fixture)
+    5. ACPI/Battery status display
+    6. Serial port loopback tests
+    7. GPS test (DT10 hardware only)
+    8. Keyboard test (interactive, separate VT)
+    9. Display test (interactive, separate VT)
+    10. Audio/speaker test
+
+Press 'q' during non-interactive tests to abort early.
+
+To restart all tests manually:
+    /root/restart_test.sh
+
+================================================================================
+                      FILE LOCATIONS AND DIRECTORY STRUCTURE
+================================================================================
+
+DIAGNOSTIC SCRIPTS:
+    /etc/local.d/00-preinstall.start    - Pre-install packages from local repo
+    /etc/local.d/run_diagnostic.start   - Main diagnostic test runner
+    /root/restart_test.sh               - Restart all diagnostic tests
+
+HELPER SCRIPTS:
+    /home/ssh/scripts/serial_test.sh    - Serial port loopback testing
+
+PYTHON MODULES:
+    /home/ssh/python/disk_health.py     - NVMe/SATA SMART diagnostics
+    /home/ssh/python/usb_test.py        - USB port power and data testing
+
+BINARIES (Rust TUI applications):
+    /home/ssh/binaries/input_device_test    - Interactive keyboard tester
+    /home/ssh/binaries/screen_test      - Display pattern tester (DRM)
+
+TEST REPORTS:
+    /root/diagnostic_report.txt         - Main diagnostic log (text)
+    /root/usb_report.json               - USB test detailed JSON report
+
+LOCAL PACKAGE REPOSITORY:
+    /var/custom-repo/main/<arch>/       - Offline APK package cache
+
+================================================================================
+                        MANUAL TEST EXECUTION
+================================================================================
+
+MEMORY/CPU STRESS TEST:
+    stress-ng --cpu <cores> --vm <cores> --vm-bytes 75% --timeout 30s --metrics-brief
+
+    Example (4-core system):
+        stress-ng --cpu 4 --vm 4 --vm-bytes 75% --timeout 30s --metrics-brief
+
+MEMORY INTEGRITY TEST:
+    memtester <size> <iterations>
+
+    Example:
+        memtester 100M 1        # Test 100MB, 1 pass
+        memtester 500M 5        # Test 500MB, 5 passes
+
+DISK HEALTH CHECK:
+    python /home/ssh/python/disk_health.py
+
+    Manual SMART tests:
+        nvme smart-log /dev/nvme0           # NVMe health
+        nvme device-self-test /dev/nvme0    # NVMe self-test
+        smartctl -a /dev/sda                # SATA health
+        smartctl -t short /dev/sda          # SATA short test
+
+USB PORT TEST:
+    python /home/ssh/python/usb_test.py
+
+    Requires: Custom USB test fixture (VID: 0x1209, PID: 0x4004)
+    Output: /root/usb_report.json
+
+SERIAL PORT TEST:
+    /home/ssh/scripts/serial_test.sh
+
+    Requires: Hardware loopback adapters on serial ports
+    Tests: All /dev/ttyS* ports at 115200 and 9600 baud
+
+KEYBOARD TEST (Interactive):
+    /home/ssh/binaries/input_device_test
+
+    - Full keyboard layout visualization, touchscreen and mouse tests
+    - Pre-programmed keyboard layouts
+    - Press ESC to exit
+
+DISPLAY TEST (Interactive):
+    /home/ssh/binaries/screen_test
+
+    - Uses DRM/KMS for direct framebuffer access (no X11)
+    - Displays test patterns
+    - Press ESC to exit
+
+AUDIO/SPEAKER TEST:
+    # Set volume and unmute
+    amixer -c 0 sset Master 100% unmute
+    amixer -c 0 sset PCM 100% unmute
+
+    # Play 880 Hz tone
+    speaker-test -t sine -f 880 -l 1
+
+    # Play test sound
+    aplay /usr/share/sounds/alsa/Front_Center.wav
+
+GPS TEST (DATOR_BB_GPS only):
+    # Start GPS daemon
+    gpsd /dev/ttyACM0 -n -F /var/run/gpsd.sock
+
+    # Monitor GPS data
+    cgps                    # Curses GPS monitor
+
+BATTERY/ACPI STATUS:
+    acpi -V                 # Verbose ACPI information
+
+================================================================================
+                        SYSTEM UTILITIES
+================================================================================
+
+PACKAGE MANAGEMENT:
+    The system uses a local offline repository to avoid network dependency.
+
+    List installed packages:
+        apk list --installed
+
+    Search local repository:
+        apk search <package>
+
+    Install from local repo:
+        apk add <package>
+
+    Note: Online repositories are disabled. Only packages in
+    /var/custom-repo/ are available.
+
+PRE-INSTALLED PACKAGES:
+    - stress-ng         : CPU and memory stress testing
+    - memtester         : RAM integrity validation
+    - smartmontools     : SATA/SAS SMART diagnostics (smartctl)
+    - nvme-cli          : NVMe health monitoring and self-test
+    - util-linux        : Block device utilities (lsblk, etc.)
+    - python3           : Diagnostic script runtime
+    - py3-usb           : Python USB library
+    - acpi              : Battery and power status
+    - alsa-utils        : Audio testing (amixer, speaker-test, aplay)
+    - gpsd              : GPS daemon and utilities
+    - gpsd-clients      : GPS monitoring tools (cgps, gpspipe)
+
+DISK UTILITIES:
+    lsblk               : List block devices
+    fdisk -l            : List partition tables
+    blkid               : Show block device attributes
+    df -h               : Show filesystem usage
+
+NETWORK UTILITIES:
+    ip addr             : Show network interfaces
+    ip route            : Show routing table
+    ping <host>         : Test network connectivity
+
+PROCESS MANAGEMENT:
+    ps aux              : List all processes
+    top                 : Real-time process monitor
+    htop                : Interactive process viewer (if available)
+    kill <pid>          : Terminate process by PID
+    killall <name>      : Terminate process by name
+
+SYSTEM INFORMATION:
+    uname -a            : Kernel and system info
+    cat /proc/cpuinfo   : CPU information
+    cat /proc/meminfo   : Memory information
+    lspci               : List PCI devices
+    lsusb               : List USB devices
+    dmesg               : Kernel ring buffer messages
+
+================================================================================
+                        ADVANCED USAGE
+================================================================================
+
+RESTART DIAGNOSTICS WITHOUT REBOOT:
+    /root/restart_test.sh
+
+    This re-runs the entire test sequence without requiring a PXE reboot.
+
+RUN INDIVIDUAL TEST COMPONENTS:
+    You can execute any test component independently. See the
+    "MANUAL TEST EXECUTION" section above for specific commands.
+
+SAVE REPORTS TO NETWORK LOCATION:
+    scp /root/diagnostic_report.txt user@server:/path/
+
+CUSTOMIZE TEST PARAMETERS:
+    Edit /etc/local.d/run_diagnostic.start and modify test parameters
+    as needed. Changes persist until reboot.
+
+VIEW REAL-TIME DIAGNOSTIC OUTPUT:
+    The main diagnostic script outputs to /dev/tty1 and logs to
+    /root/diagnostic_report.txt simultaneously.
+
+    To monitor live output from another terminal:
+        tail -f /root/diagnostic_report.txt
+
+ABORT TESTS EARLY:
+    Press 'q' during non-interactive tests to abort the sequence.
+    This is useful if a failure is detected and you need immediate access.
+
+================================================================================
+                        DEVELOPMENT NOTES
+================================================================================
+
+OVERLAY PERSISTENCE:
+    This is a diskless system. All files are loaded from the
+    .apkovl.tar.gz overlay during PXE boot. Changes made at runtime
+    are lost on reboot unless saved with:
+        lbu commit
+
+LOCAL REPOSITORY STRUCTURE:
+    /var/custom-repo/main/<arch>/APKINDEX.tar.gz
+    /var/custom-repo/main/<arch>/*.apk
+
+    This offline repository is included in the overlay to ensure
+    diagnostics work without network dependency.
+
+STARTUP SCRIPT EXECUTION:
+    Scripts in /etc/local.d/ with .start extension are executed
+    during boot by the 'local' service. Execution order is alphabetical.
+
+PYTHON ENVIRONMENT:
+    Python 3 is installed with py3-usb module for USB testing.
+    Use unbuffered output (-u flag) to see real-time progress.
+
+RUST BINARIES:
+    Pre-compiled for x86_64 and i686 architectures.
+    Source code available in development repository for customization.
+
+================================================================================
+                        SUPPORT INFORMATION
+================================================================================
+
+For technical support or to report issues:
+    Email: albin.nojback@gmail.com
+
+Project documentation and source code:
+    See README.md in the development repository
+
+Hardware requirements:
+    - Minimum 512MB RAM
+    - PXE boot capability
+    - Ethernet connection during boot
+
+Optional hardware for full testing:
+    - Custom USB test fixture (VID: 0x1209, PID: 0x4004)
+    - Serial port loopback adapters
+    - NVMe/SATA storage devices
+
+================================================================================
+                        END OF REFERENCE GUIDE
+================================================================================

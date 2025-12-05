@@ -1,4 +1,4 @@
-client/keyboard_test
+client/input_device_test
 client/screen_test
 client/packages
 client/overlays/x86_64

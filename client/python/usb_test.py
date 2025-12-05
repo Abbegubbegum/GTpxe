@@ -35,12 +35,13 @@ from typing import Dict, Any, List, Tuple
 IDLE_UNDERVOLT_MV = 4800  # Absolute minimum to consider idle VBUS functional
 
 # Test limits for the tests
-MAX_MBPS_DIFF = 0.2           # Maximum data throughput difference between ports
-MIN_MV_LOAD = 4000           # Minimum voltage during the load tests
+MAX_MBPS_DIFF = 0.2           # Minimum data throughput difference from the ports
+# Minimum voltage during the load tests, this is low because of fixture resistance
+MIN_MV_LOAD = 3800
 MAX_RIPPLE_MVPP = 50         # Typical: 10-20mVpp; flag if >50mVpp
 MIN_MAX_CURRENT_MA = 400     # Must deliver at least 400mA
-# Maximum mean resistance (3Ω = 2Ω fixture + 1Ω margin for dirty contacts)
-MAX_RESISTANCE_MOHM = 3000
+# Maximum mean resistance (2Ω = 1.5Ω fixture + 0.5Ω margin for dirty contacts)
+MAX_RESISTANCE_MOHM = 2000
 
 # ---------------------- USB IDs & Protocol ----------------------
 VID = 0x1209
@@ -51,6 +52,7 @@ REQ_SET_PORT = 0x02  # OUT: wValue = port
 REQ_GET_POWER = 0x03  # IN:  power report blob
 REQ_GET_ADC_SAMPLES = 0x04  # Trigger bulk transfer of ADC samples
 REQ_SET_PORT_PASSED = 0x05  # OUT: wValue = port (turns on pass LED)
+REQ_RESET_STATUS_LEDS = 0x06  # OUT: reset all status LEDs
 REQ_GET_PORTMAP = 0x10  # IN:  bitmask of available ports
 
 TEST_SECS = 3.0
@@ -113,16 +115,63 @@ def get_ports_to_test(dev):
 
 
 def set_port_and_reopen(dev, intf_num, port):
+    """
+    Switch to a port and wait for re-enumeration.
+
+    Returns:
+        (dev, intf_num, success) - device handle, interface number, and success flag
+    """
     ctrl_out(dev, REQ_SET_PORT, intf_num, port)
-    time.sleep(1)  # allow re-enumeration
-    dev = find_device()
-    intf_num = find_vendor_interface(dev).bInterfaceNumber
-    return dev
+
+    # Wait for device to switch and re-enumerate (with timeout)
+    max_retries = 5
+    retry_delay = 1.0  # seconds
+
+    for attempt in range(max_retries):
+        time.sleep(retry_delay)
+        try:
+            dev = find_device()
+            intf_num = find_vendor_interface(dev).bInterfaceNumber
+
+            # Verify the device is actually on the requested port
+            actual_port = ctrl_in(dev, REQ_GET_PORT, 1, intf_num)[0]
+            if actual_port == port:
+                return dev, intf_num, True
+            elif actual_port == 0:
+                # Device reverted to port 0 due to enumeration failure
+                print(
+                    f"  Device auto-reverted to port 0 (enumeration failed on port {port})")
+                return dev, intf_num, False
+            else:
+                # Unexpected port - keep retrying
+                if attempt < max_retries - 1:
+                    print(
+                        f"  Device on unexpected port {actual_port}, retrying...")
+                    continue
+                else:
+                    print(
+                        f"  ERROR: Device on port {actual_port} instead of {port}")
+                    return dev, intf_num, False
+        except Exception:
+            if attempt < max_retries - 1:
+                print(
+                    f"  Enumeration attempt {attempt + 1} failed, retrying...")
+            else:
+                print(
+                    f"  ERROR: Device failed to enumerate after switching to port {port}")
+
+    # All retries exhausted - device is unreachable
+    return None, None, False
 
 
 def set_port_passed(dev, intf_num, port):
     """Turn on the pass LED for the specified port."""
     ctrl_out(dev, REQ_SET_PORT_PASSED, intf_num, port)
+
+
+def reset_status_leds(dev, intf_num):
+    """Reset all status LEDs (turn them off)."""
+    ctrl_out(dev, REQ_RESET_STATUS_LEDS, intf_num)
 
 # ---------------------- Bulk loopback ----------------------
 
@@ -307,7 +356,7 @@ def parse_power_report(blob):
         "current_mA":       current_mA[:n],
         "resistance_mOhm":  resistance_mOhm[:n],
         "max_current_mA":   max_current,
-        "undervolt_at_mA":  undervolt_at,
+        "undervolt_at_pct":  undervolt_at,
         "errors":           errors,
     }
 
@@ -344,8 +393,7 @@ def evaluate_port(port_result: Dict[str, Any]) -> Tuple[bool, List[str], Dict[st
     pr = port_result.get("power_report", {}) or {}
     flags = pr.get("flags", 0)
     v_idle = pr.get("v_idle_mV", 0)
-    # Actually percentage, not mA
-    undervolt_at_pct = pr.get("undervolt_at_mA", 0)
+    undervolt_at_pct = pr.get("undervolt_at_pct", 0)
     vmin_list = pr.get("v_min_mV", [])
     ripple_list = pr.get("ripple_mVpp", [])
     max_measured_current = pr.get("max_current_mA")
@@ -438,6 +486,13 @@ def main():
     try:
         dev = find_device()
         intf_num = find_vendor_interface(dev).bInterfaceNumber
+
+        # Reset all status LEDs at the start of testing
+        try:
+            reset_status_leds(dev, intf_num)
+        except Exception as e:
+            print(f"Warning: Failed to reset status LEDs: {e}")
+
         ports = get_ports_to_test(dev)
     except Exception as e:
         # Hard fail: no device / enumeration error
@@ -450,7 +505,58 @@ def main():
         sys.exit(1)
 
     for p in ports:
-        dev = set_port_and_reopen(dev, intf_num, p)
+        dev, intf_num, enum_success = set_port_and_reopen(dev, intf_num, p)
+
+        # Check if device enumeration failed completely (unreachable)
+        if dev is None:
+            print(
+                f"USB Port {p} — FAIL: Device became unreachable after port switch")
+            print(f"  ERROR: Could not recover device. Testing aborted.")
+            overall_pass = False
+
+            # Add minimal result for this port
+            res = {
+                "port": p,
+                "pass": False,
+                "fail_reasons": ["Device failed to enumerate and became unreachable"],
+                "enumeration_failed": True,
+                "rollup": {
+                    "throughput_Mbps": 0.0,
+                    "vidle_mV": 0,
+                    "vmin_mV": 0,
+                    "max_droop_mV": 0,
+                    "max_ripple_mVpp": 0,
+                    "max_measured_current_mA": 0,
+                }
+            }
+            summary_obj["tested_ports"].append(p)
+            summary_obj["per_port"].append(res)
+            break
+
+        # Check if enumeration failed but device recovered to port 0
+        if not enum_success:
+            print(
+                f"USB Port {p} — FAIL: Device failed to enumerate (VBUS present but no data lines)")
+            overall_pass = False
+
+            # Add result for this port
+            res = {
+                "port": p,
+                "pass": False,
+                "fail_reasons": ["Device failed to enumerate - VBUS present but no data lines"],
+                "enumeration_failed": True,
+                "rollup": {
+                    "throughput_Mbps": 0.0,
+                    "vidle_mV": 0,
+                    "vmin_mV": 0,
+                    "max_droop_mV": 0,
+                    "max_ripple_mVpp": 0,
+                    "max_measured_current_mA": 0,
+                }
+            }
+            summary_obj["tested_ports"].append(p)
+            summary_obj["per_port"].append(res)
+            continue
 
         res = run_bulk_test(dev, duration_s=TEST_SECS, pkt_size=PKT_SIZE)
         res["port"] = p
@@ -525,7 +631,7 @@ def main():
 
     # Try to switch back to neutral/default port 0 (best effort)
     try:
-        set_port_and_reopen(dev, intf_num, 0)
+        dev, intf_num, _ = set_port_and_reopen(dev, intf_num, 0)
     except Exception:
         pass
 

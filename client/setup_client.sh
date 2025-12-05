@@ -45,6 +45,7 @@ chmod +x /home/ssh/binaries/*
 chmod +x /home/ssh/scripts/*
 
 mv /home/ssh/scripts/restart_test.sh /root
+mv /home/ssh/instructions.txt /root
 lbu add /root
 
 echo "Disabling online APK repositories..."

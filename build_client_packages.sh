@@ -6,7 +6,7 @@ set -eu
 
 cd client
 
-cd keyboard_test
+cd input_device_test
 ./build.sh
 
 cd ../screen_test
@@ -23,8 +23,8 @@ mkdir -p packages/x86/binaries
 cp -r startup packages/x86_64/
 cp -r startup packages/x86/
 
-cp keyboard_test/build/keyboard_test_x86_64 packages/x86_64/binaries/keyboard_test
-cp keyboard_test/build/keyboard_test_i686 packages/x86/binaries/keyboard_test
+cp input_device_test/build/input_device_test_x86_64 packages/x86_64/binaries/input_device_test
+cp input_device_test/build/input_device_test_i686 packages/x86/binaries/input_device_test
 
 cp screen_test/build/screen_test_x86_64 packages/x86_64/binaries/screen_test
 cp screen_test/build/screen_test_i686 packages/x86/binaries/screen_test
@@ -37,3 +37,6 @@ cp -r scripts packages/x86/
 
 cp -r python packages/x86_64/
 cp -r python packages/x86/
+
+cp -r instructions.txt packages/x86_64/
+cp -r instructions.txt packages/x86/

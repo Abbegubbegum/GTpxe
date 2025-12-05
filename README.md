@@ -369,7 +369,7 @@ sudo ./setup_server.sh --type ubuntu
 
 -   Add or modify diagnostic scripts in `client/startup/` and `client/scripts/`
 -   Python diagnostic modules are located in `client/python/`
--   Rust TUI applications (keyboard/screen tests) can be rebuilt from source in `client/keyboard_test/` and `client/screen_test/`
+-   Rust TUI applications (keyboard/screen tests) can be rebuilt from source in `client/input_device_test/` and `client/screen_test/`
 -   Pre-built binaries for both x86_64 and i686 architectures are stored in `client/packages/{arch}/binaries/`
 -   Machine-specific configurations (e.g., keyboard layouts) can be customized in the Rust source code
 -   Rebuild the overlay with `./build_client_packages.sh` after making changes

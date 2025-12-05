@@ -70,6 +70,11 @@ chmod +x overlays/x86_64/home/ssh/scripts/*
 chmod +x overlays/x86/home/ssh/binaries/*
 chmod +x overlays/x86/home/ssh/scripts/*
 
+mv overlays/x86_64/home/ssh/scripts/restart_test.sh overlays/x86_64/root/
+mv overlays/x86/home/ssh/scripts/restart_test.sh overlays/x86/root/
+
+mv overlays/x86_64/home/ssh/instructions.txt overlays/x86_64/root/
+mv overlays/x86/home/ssh/instructions.txt overlays/x86/root/
 
 # Compress the overlays into tar.gz files.
 cd overlays/x86_64
