@@ -17,7 +17,7 @@ echo DEBUG: Architecture chosen: ${arch}
 
 # ---------- Where your stuff lives ----------
 # Change these to your actual hosts/paths
-set server_ip          192.168.150.62
+set server_ip          192.168.200.1
 set server             http://${server_ip}
 set alpine_repo        ${server}/alpine/apks
 set alpine_boot        ${server}/alpine/boot/${arch}
